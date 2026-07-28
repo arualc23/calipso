@@ -6,7 +6,9 @@ edition = "2024"
 [dependencies]
 egui-wgpu = "0.34"
 egui-winit = "0.34"
+egui = {version = "0.34.3", features = ["default_fonts"]}
 env_logger = "0.11.11"
 log = "0.4.33"
 pollster = "1.0.1"
 rand = "0.10.2"
+tokio = "1.53.1"

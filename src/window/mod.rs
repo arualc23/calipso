@@ -72,7 +72,7 @@ impl<F: FnOnce() -> Box<dyn State>> ControlFlow<F> {
             &view,
             output,
             screen_desriptor,
-            |ctx| self.state.as_mut().unwrap().run_frame(ctx, &mut gui_channel)
+            |ui| self.state.as_mut().unwrap().run_frame(ui, &mut gui_channel)
         );
 
         self.state.as_mut().unwrap().process_input(gui_channel);
@@ -145,7 +145,6 @@ impl<F: FnOnce() -> Box<dyn State>> winit::application::ApplicationHandler for C
                             return;
                         }
                     }
-                    // Reconfigure the surface if it's lost or outdated
                     Err(wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated) => {
                         self.resize(self.wgpu_state.as_ref().unwrap().size)
                     }

@@ -1,3 +1,4 @@
+// use egui_winit::egui::UiBuilder;
 use egui_winit::{egui};
 
 use egui::epaint::Shadow;
@@ -74,7 +75,7 @@ impl EguiRenderer {
         window_surface_view: &TextureView,
         surface_texture: SurfaceTexture,
         screen_descriptor: ScreenDescriptor,
-        mut run_ui: impl FnMut(&Context),
+        mut run_ui: impl FnMut(&mut egui::Ui),
     ) {
 
         let mut raw_input = self.state.take_egui_input(&window);
@@ -84,6 +85,7 @@ impl EguiRenderer {
 
         let full_output = self.ctx().run_ui(raw_input, |ui| {
             run_ui(ui);
+            // ui.label("test");
         });
 
         self.state
