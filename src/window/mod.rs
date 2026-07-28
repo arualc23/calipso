@@ -8,10 +8,12 @@ pub mod state;
 use wgpu_state::WgpuState;
 use state::State;
 
+pub(crate) use render::EguiRenderer;
+
 
 
 #[derive(Default)]
-pub(crate) struct ControlFlow<F: FnOnce() -> Box<dyn State>> {
+pub(crate) struct ControlFlow<F: FnOnce(&EguiRenderer) -> Box<dyn State>> {
     state: Option<Box<dyn State>>,
     closing_requested: bool,
     wgpu_state: Option<WgpuState>,
@@ -20,7 +22,7 @@ pub(crate) struct ControlFlow<F: FnOnce() -> Box<dyn State>> {
     initializer: Option<F>
 }
 
-impl<F: FnOnce() -> Box<dyn State>> ControlFlow<F> {
+impl<F: FnOnce(&EguiRenderer) -> Box<dyn State>> ControlFlow<F> {
 
     // pub fn get_rng(&self) -> Rc<RefCell<rand::rngs::ThreadRng>> {
     //     self.rng.clone()
@@ -101,7 +103,7 @@ impl<F: FnOnce() -> Box<dyn State>> ControlFlow<F> {
     }
 }
 
-impl<F: FnOnce() -> Box<dyn State>> winit::application::ApplicationHandler for ControlFlow<F> {
+impl<F: FnOnce(&render::EguiRenderer) -> Box<dyn State>> winit::application::ApplicationHandler for ControlFlow<F> {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
 
         if self.wgpu_state.is_none() {
@@ -110,7 +112,7 @@ impl<F: FnOnce() -> Box<dyn State>> winit::application::ApplicationHandler for C
 
         if self.state.is_none() {
             self.state = Some(
-                (self.initializer.take().expect("Cannot initialize the window twice"))()
+                (self.initializer.take().expect("Cannot initialize the window twice"))(&self.wgpu_state.as_ref().unwrap().egui)
             );
 
         }
