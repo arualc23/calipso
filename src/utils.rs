@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 pub const ASSETS: &str = "assets";
+pub const UV: egui::Rect = egui::Rect {min: egui::Pos2 {x: 0.0, y: 0.0}, max: egui::Pos2 {x: 1.0, y: 1.0}};
 
 #[macro_export]
 macro_rules! path {

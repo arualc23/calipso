@@ -1,6 +1,5 @@
 use egui_wgpu::wgpu;
 use egui_winit::winit::{self, event};
-use std::{rc::Rc, cell::RefCell};
 
 mod wgpu_state;
 mod render;
@@ -18,15 +17,10 @@ pub(crate) struct ControlFlow<F: FnOnce(&EguiRenderer) -> Box<dyn State>> {
     closing_requested: bool,
     wgpu_state: Option<WgpuState>,
     title: String,
-    // rng: Rc<RefCell<rand::rngs::ThreadRng>>,
     initializer: Option<F>
 }
 
 impl<F: FnOnce(&EguiRenderer) -> Box<dyn State>> ControlFlow<F> {
-
-    // pub fn get_rng(&self) -> Rc<RefCell<rand::rngs::ThreadRng>> {
-    //     self.rng.clone()
-    // }
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         println!("Resize called");
@@ -65,8 +59,6 @@ impl<F: FnOnce(&EguiRenderer) -> Box<dyn State>> ControlFlow<F> {
             pixels_per_point: window.scale_factor() as f32,
         };
 
-        let mut gui_channel = Box::new(());
-
         wgpu.egui.draw(
             &wgpu.device,
             &wgpu.queue,
@@ -74,10 +66,8 @@ impl<F: FnOnce(&EguiRenderer) -> Box<dyn State>> ControlFlow<F> {
             &view,
             output,
             screen_desriptor,
-            |ui| self.state.as_mut().unwrap().run_frame(ui, &mut gui_channel)
+            |ui| self.state.as_mut().unwrap().run_frame(ui)
         );
-
-        self.state.as_mut().unwrap().process_input(gui_channel);
 
         self.check_transition_state();
 
