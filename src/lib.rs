@@ -20,8 +20,10 @@ pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::s
 mod tests {
     use std::{sync::Arc};
 
-    use super::*;
-    use egui::{Color32, ColorImage, Pos2, Rect, TextureHandle, Vec2};
+    use crate::map::MapDisplay;
+
+use super::*;
+    use egui::{ColorImage, Pos2, Rect, TextureHandle};
     #[allow(unused_imports)]
     use log::{debug, error, info, warn};
 
@@ -40,21 +42,17 @@ mod tests {
         map: map::Map
     }
 
+    impl map::MapDisplay for TestState {
+        fn map(&mut self) -> &mut map::Map {
+            &mut self.map
+        }
+    }
+
     impl window::state::State for TestState {
         fn run_frame(&mut self, ui: &mut egui_winit::egui::Ui) {
 
             let painter = ui.debug_painter();
-            painter.image(self.map.texture.id(), self.map.rect, utils::UV, Color32::WHITE);
-
-            let camera_coords = Vec2::ZERO;
-            let cursor_coords = ui.input(|i| i.pointer.latest_pos().unwrap_or_default());
-            let scroll = ui.input(|i| i.smooth_scroll_delta().y);
-
-            if ui.input(|i| i.pointer.primary_clicked()) {
-                debug!("{:?}", self.map.handle_click(cursor_coords));
-            }
-
-            self.map.update(camera_coords, cursor_coords.to_vec2(), scroll);
+            self.paint_map(ui, &painter);
 
         }
         fn transition(&mut self) -> Option<Box<dyn window::state::State>> {

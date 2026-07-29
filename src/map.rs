@@ -1,5 +1,6 @@
-use std::sync::Arc;
-use egui::{TextureHandle, Rect, ColorImage, Color32, Vec2, Pos2};
+use std::{sync::Arc, ops::Index};
+use egui::{Color32, ColorImage, Painter, Pos2, Rect, TextureHandle, Ui, Vec2};
+use crate::utils;
 
 const SCROLL_SCALE: f32 = 500.0;
 
@@ -53,7 +54,7 @@ impl Map {
     }
 }
 
-trait SafeImageIndex<Idx>: std::ops::Index<Idx> {
+trait SafeImageIndex<Idx>: Index<Idx> {
     fn get(&self, index: Idx) -> Option<&Color32>;
 }
 impl SafeImageIndex<(usize, usize)> for ColorImage {
@@ -63,5 +64,22 @@ impl SafeImageIndex<(usize, usize)> for ColorImage {
         } else {
             None
         }
+    }
+}
+
+pub trait MapDisplay {
+    fn map(&mut self) -> &mut Map;
+    fn paint_map(&mut self, ui: &mut Ui, painter: &Painter) {
+        painter.image(self.map().texture.id(), self.map().rect, utils::UV, Color32::WHITE);
+
+        let camera_coords = Vec2::ZERO;
+        let cursor_coords = ui.input(|i| i.pointer.latest_pos().unwrap_or_default());
+        let scroll = ui.input(|i| i.smooth_scroll_delta().y);
+
+        if ui.input(|i| i.pointer.primary_clicked()) {
+            log::debug!("{:?}", self.map().handle_click(cursor_coords));
+        }
+
+        self.map().update(camera_coords, cursor_coords.to_vec2(), scroll);
     }
 }
