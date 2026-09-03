@@ -1,6 +1,6 @@
-use std::{sync::Arc, ops::Index};
-use egui::{Color32, ColorImage, Painter, Pos2, Rect, TextureHandle, Ui, Vec2};
-use crate::utils;
+use std::{fmt::Debug, ops::Index, sync::Arc};
+use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
+use crate::{map, utils};
 
 const SCROLL_SCALE: f32 = 500.0;
 
@@ -67,8 +67,10 @@ impl SafeImageIndex<(usize, usize)> for ColorImage {
     }
 }
 
+///Implements painting the given map and updating it with camera movement on the given painter and ui.
 pub trait MapDisplay {
     fn map(&mut self) -> &mut Map;
+    ///Paints and updates the map.
     fn paint_map(&mut self, ui: &mut Ui, painter: &Painter) {
         painter.image(self.map().texture.id(), self.map().rect, utils::UV, Color32::WHITE);
 
@@ -82,4 +84,45 @@ pub trait MapDisplay {
 
         self.map().update(camera_coords, cursor_coords.to_vec2(), scroll);
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Hash)]
+struct TileId {
+    inner: u32
+} 
+
+impl From<Color32> for TileId {
+    fn from(value: Color32) -> Self {
+        let inner: u32 = (value.r() as u32) << 24 +
+                         (value.g() as u32) << 16 +
+                         (value.b() as u32) << 8;
+        Self { inner }
+    }
+}
+
+#[derive(Debug)]
+pub struct LoadMapError(String);
+
+impl LoadMapError {
+    fn from_debug(value: impl Debug) -> Self {
+        Self(format!("{value:?}"))
+    }
+}
+
+pub fn load_map(directory_name: &str, ctx: &Context) -> Result<Map, LoadMapError> {
+    const RAW_FILE_NAME: &str = "raw.png";
+    const VISUAL_FILE_NAME: &str = "vis.png";
+    use std::path::Path;
+    use std::sync::LazyLock;
+    static SAVES_DIR: LazyLock<&Path> = LazyLock::new(|| Path::new("saves"));
+
+    let dir_path = SAVES_DIR.join(directory_name);
+
+    let raw_image = utils::load_image_from_path(dir_path.join(RAW_FILE_NAME))
+        .map_err(|e| LoadMapError::from_debug(e))?;
+    let map_texture = utils::load_texture_from_path(dir_path.join(VISUAL_FILE_NAME), ctx, directory_name)
+        .map_err(|e| LoadMapError::from_debug(e))?;
+    let starting_rect = Rect::from_min_max(Pos2::ZERO, pos2(raw_image.size[0] as f32, raw_image.size[1] as f32));
+    Ok(Map::new(map_texture, raw_image, starting_rect))
+
 }

@@ -18,12 +18,10 @@ pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::s
 
 #[cfg(test)]
 mod tests {
-    use std::{sync::Arc};
 
     use crate::map::MapDisplay;
 
-use super::*;
-    use egui::{ColorImage, Pos2, Rect, TextureHandle};
+    use super::*;
     #[allow(unused_imports)]
     use log::{debug, error, info, warn};
 
@@ -32,8 +30,10 @@ use super::*;
         env_logger::init();
         info!("Staritng test");
         init(|renderer| {
-            let (map_texture, raw) = utils::load_texture_from_filename("test1.png", renderer.ctx()).unwrap();
-            Box::new(TestState::new(map_texture, raw))
+            // let (map_texture, raw) = utils::load_texture_from_filename("test1.png", renderer.ctx()).unwrap();
+            // Box::new(TestState::new(map_texture, raw))
+            let map = map::load_map("test1", renderer.ctx()).unwrap();
+            Box::new(TestState::new(map))
         }, "Test".to_string());
         info!("After init");
     }
@@ -42,7 +42,7 @@ use super::*;
         map: map::Map
     }
 
-    impl map::MapDisplay for TestState {
+    impl MapDisplay for TestState {
         fn map(&mut self) -> &mut map::Map {
             &mut self.map
         }
@@ -61,9 +61,8 @@ use super::*;
     }
 
     impl TestState {
-        pub fn new(map_texture: Arc<TextureHandle>, raw: ColorImage) -> Self {
-            let starting_rect = Rect::from_two_pos(Pos2::ZERO, (raw.size[0] as f32, raw.size[1] as f32).into());
-            Self { map: map::Map::new(map_texture, raw, starting_rect) }
+        pub fn new(map: map::Map) -> Self {
+            Self { map }
         }
         
     }
