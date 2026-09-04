@@ -1,8 +1,11 @@
+#![feature(vec_from_fn)]
+
 use egui_winit::winit::{self, platform::wayland::EventLoopBuilderExtWayland};
 
 pub mod window;
 pub mod map;
 mod utils;
+mod game;
 
 pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::state::State>, title: String) {
     #[cfg(test)]
@@ -19,7 +22,7 @@ pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::s
 #[cfg(test)]
 mod tests {
 
-    use crate::map::MapDisplay;
+use crate::map::MapDisplay;
 
     use super::*;
     #[allow(unused_imports)]
@@ -30,9 +33,7 @@ mod tests {
         env_logger::init();
         info!("Staritng test");
         init(|renderer| {
-            // let (map_texture, raw) = utils::load_texture_from_filename("test1.png", renderer.ctx()).unwrap();
-            // Box::new(TestState::new(map_texture, raw))
-            let map = map::load_map("test1", renderer.ctx()).unwrap();
+            let (map, lmap) = map::load_map("test1", renderer.ctx().clone()).unwrap();
             Box::new(TestState::new(map))
         }, "Test".to_string());
         info!("After init");

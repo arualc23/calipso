@@ -1,15 +1,20 @@
-use std::{fmt::Debug, ops::Index, sync::Arc};
+use std::{cell::RefCell, collections::HashSet, fmt::Debug, ops::Index, rc::Rc, sync::Arc};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
-use crate::{map, utils};
+use log::info;
+use crate::{game::{self, TileId}, map, utils::{self}};
 
 const SCROLL_SCALE: f32 = 500.0;
+pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
 
 pub struct Map {
-    pub texture: Arc<TextureHandle>,
-    pub rect: Rect,
-    pub raw: ColorImage,
-    pub starting_rect: Rect,
-    pub starting_diag: f32,
+    texture: Arc<TextureHandle>,
+    rect: Rect,
+    ids_map: ColorImage,
+    starting_rect: Rect,
+    starting_diag: f32,
+    raw_image: ColorImage,
+    // unique: Rc<RefCell<ThreadUniqueGenerator>>,
+    ctx: Context
 }
 
 impl Map {
@@ -23,9 +28,10 @@ impl Map {
         *point += (*point - camera_coords - cursor_coords).to_vec2() * scroll/SCROLL_SCALE;
     }
 
-    pub fn handle_click(&self, cursor_coords: Pos2) -> Color32 {
+    pub(crate) fn get_tile_id_from_cursor(&self, cursor_coords: Pos2) -> TileId {
         let translated_pos = self.current_to_starting_coords(cursor_coords);
-        self.get_color(translated_pos.x as isize, translated_pos.y as isize)
+        let color = self.get_color(translated_pos.x as isize, translated_pos.y as isize);
+        TileId::from(color)
     }
 
     fn get_color(&self, x: isize, y: isize) -> Color32 {
@@ -33,23 +39,35 @@ impl Map {
             usize::try_from(x),
             usize::try_from(y)
         ) else {return Color32::PLACEHOLDER};
-        *(self.raw.get((x, y)).unwrap_or(&Color32::PLACEHOLDER))
+        *(self.ids_map.get((x, y)).unwrap_or(&Color32::PLACEHOLDER))
     }
 
     fn current_to_starting_coords(&self, pos: Pos2) -> Pos2 {
         self.starting_rect.min + (pos - self.rect.min)/self.rect.size().length()*self.starting_diag
     }
 
-    pub fn new(texture: Arc<TextureHandle>, raw: ColorImage, starting_rect: Rect, ) -> Self {
+    fn get_new_texture(raw_image: &ColorImage, ctx: &Context) -> Arc<TextureHandle> {
+        utils::load_texture_from_image(raw_image, ctx, "real_map_texture")
+    }
+
+    fn update_texture(&mut self) {
+        self.texture = 
+            Self::get_new_texture(&self.raw_image, &self.ctx);
+    }
+
+    pub fn new(raw_image: ColorImage, ids_map: ColorImage, starting_rect: Rect, ctx: Context) -> Self {
         let rect = starting_rect;
         let starting_diag = rect.size().length();
-        dbg!(raw.size);
+        let texture = Self::get_new_texture(&raw_image, &ctx);
+        dbg!(ids_map.size);
         Self {
             texture,
             rect,
-            raw,
+            ids_map,
             starting_rect,
-            starting_diag
+            starting_diag,
+            raw_image,
+            ctx
         }
     }
 }
@@ -78,25 +96,11 @@ pub trait MapDisplay {
         let cursor_coords = ui.input(|i| i.pointer.latest_pos().unwrap_or_default());
         let scroll = ui.input(|i| i.smooth_scroll_delta().y);
 
-        if ui.input(|i| i.pointer.primary_clicked()) {
-            log::debug!("{:?}", self.map().handle_click(cursor_coords));
-        }
+        // if ui.input(|i| i.pointer.primary_clicked()) {
+        //     log::debug!("{:?}", self.map().handle_click(cursor_coords));
+        // }
 
         self.map().update(camera_coords, cursor_coords.to_vec2(), scroll);
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Hash)]
-struct TileId {
-    inner: u32
-} 
-
-impl From<Color32> for TileId {
-    fn from(value: Color32) -> Self {
-        let inner: u32 = (value.r() as u32) << 24 +
-                         (value.g() as u32) << 16 +
-                         (value.b() as u32) << 8;
-        Self { inner }
     }
 }
 
@@ -109,8 +113,8 @@ impl LoadMapError {
     }
 }
 
-pub fn load_map(directory_name: &str, ctx: &Context) -> Result<Map, LoadMapError> {
-    const RAW_FILE_NAME: &str = "raw.png";
+pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::LogicalMap), LoadMapError> {
+    const IDS_MAP_FILE_NAME: &str = "raw.png";
     const VISUAL_FILE_NAME: &str = "vis.png";
     use std::path::Path;
     use std::sync::LazyLock;
@@ -118,11 +122,27 @@ pub fn load_map(directory_name: &str, ctx: &Context) -> Result<Map, LoadMapError
 
     let dir_path = SAVES_DIR.join(directory_name);
 
-    let raw_image = utils::load_image_from_path(dir_path.join(RAW_FILE_NAME))
+    let ids_map = utils::load_image_from_path(dir_path.join(IDS_MAP_FILE_NAME))
         .map_err(|e| LoadMapError::from_debug(e))?;
-    let map_texture = utils::load_texture_from_path(dir_path.join(VISUAL_FILE_NAME), ctx, directory_name)
+    let real_map_image = utils::load_image_from_path(dir_path.join(VISUAL_FILE_NAME))
         .map_err(|e| LoadMapError::from_debug(e))?;
-    let starting_rect = Rect::from_min_max(Pos2::ZERO, pos2(raw_image.size[0] as f32, raw_image.size[1] as f32));
-    Ok(Map::new(map_texture, raw_image, starting_rect))
+
+    assert_eq!(ids_map.size, real_map_image.size);
+    let size = ids_map.size;
+
+    let all_ids = ids_map.as_raw().chunks_exact(4)
+                                    .map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()) >> 8)
+                                    .fold(HashSet::with_capacity(5000), |mut acc, item| {acc.insert(item); acc});
+    
+    let length = ids_map.as_raw().chunks_exact(4).map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()) >> 8).max().expect("If there isn't a max there must've been no tiles") as usize;
+
+    let tiles_container = game::TilesContainer::new(length, size);
+
+    let logical_map = game::LogicalMap::new(tiles_container, size);
+
+    let starting_rect = Rect::from_min_max(Pos2::ZERO, pos2(real_map_image.size[0] as f32, real_map_image.size[1] as f32));
+    Ok((Map::new(real_map_image, ids_map, starting_rect, ctx), logical_map))
 
 }
+
+//TODO: make laod_map load both graphical and logical map, so: 1) load ids_map, 2) load visual, 3) load (for now create) tiles 4) load textures from visual into tiles 5) return everything.
