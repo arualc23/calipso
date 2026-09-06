@@ -1,7 +1,6 @@
 use egui_wgpu::wgpu;
 use egui_winit::winit::{self, event};
-use std::{sync::atomic::{AtomicBool, Ordering}, thread};
-use egui::ColorImage;
+use std::{sync::atomic::{AtomicBool, Ordering}};
 
 mod wgpu_state;
 mod render;
@@ -11,22 +10,18 @@ use state::State;
 
 pub(crate) use render::EguiRenderer;
 
-use crate::game::{self, game_loop};
-
 pub(crate) static CLOSING_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Default)]
-pub(crate) struct ControlFlow<F: FnOnce(&render::EguiRenderer) -> (Box<dyn State>)> {
+pub(crate) struct ControlFlow<F: FnOnce(&render::EguiRenderer) -> Box<dyn State>> {
     state: Option<Box<dyn State>>,
     closing_requested: bool,
     wgpu_state: Option<WgpuState>,
     title: String,
     initializer: Option<F>,
-    // game_loop_body: Option<G>,
-    // global: Arc<Mutex<game::Global>>
 }
 
-impl<F: FnOnce(&render::EguiRenderer) -> (Box<dyn State>)> ControlFlow<F> {
+impl<F: FnOnce(&render::EguiRenderer) -> Box<dyn State>> ControlFlow<F> {
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         println!("Resize called");
@@ -89,7 +84,6 @@ impl<F: FnOnce(&render::EguiRenderer) -> (Box<dyn State>)> ControlFlow<F> {
     }
 
     fn close(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        // self.global.lock().unwrap().closing_requested = true;
         CLOSING_REQUESTED.store(true, Ordering::Release);
         event_loop.exit();
     }
@@ -101,8 +95,6 @@ impl<F: FnOnce(&render::EguiRenderer) -> (Box<dyn State>)> ControlFlow<F> {
             wgpu_state: None,
             title,
             initializer: Some(initializer),
-            // game_loop_body: Some(body),
-            // global: Arc::new(Mutex::new(game::Global::default()))
         }
     }
 }
@@ -119,11 +111,6 @@ impl<F: FnOnce(&EguiRenderer) -> Box<dyn State>> winit::application::Application
             self.state = Some(state);
 
         }
-
-        // let game_loop_body = self.game_loop_body.take().unwrap();
-        // let global = self.global.clone();
-
-        // let _ = thread::spawn(move || game_loop(game_loop_body, global));
     }
 
     fn window_event(

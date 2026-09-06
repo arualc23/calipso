@@ -8,6 +8,8 @@ pub mod map;
 mod utils;
 mod game;
 
+pub use game::init_game_loop;
+
 pub(crate) use window::CLOSING_REQUESTED;
 
 pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::state::State>, title: String) {
@@ -16,6 +18,8 @@ pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::s
     #[cfg(not(test))]
     let event_loop = winit::event_loop::EventLoop::builder().with_any_thread(false).build().unwrap();
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+
+    // log::info!("Closing requested: {:?}", CLOSING_REQUESTED);
 
     let mut app = window::ControlFlow::new(initializer, title);
 
@@ -66,7 +70,7 @@ use crate::map::MapDisplay;
 
     impl TestState {
         pub fn new(map: map::Map, logical_map: game::LogicalMap) -> Self {
-            game::init_game_loop(|| info!("Hello world!"), logical_map, map.get_raw_image());
+            let send = game::init_game_loop(|_input| info!("Hello world!"), logical_map, map.get_raw_image());
             Self { map }
         }
         

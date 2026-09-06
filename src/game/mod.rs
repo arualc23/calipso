@@ -1,4 +1,4 @@
-use std::{ops::{Index}, sync::{Arc, Mutex}};
+use std::{any::Any, ops::Index, sync::{Arc, Mutex, atomic::Ordering, mpsc}};
 
 use egui::{Color32, ColorImage};
 
@@ -117,15 +117,30 @@ impl LogicalMap {
     }
 }
 
-pub trait GameLoop = FnMut() + Send + 'static;
+pub trait GameLoop = FnMut(&Box<dyn Any + Send>) + Send + 'static;
 
 
-pub(crate) fn game_loop(mut body: impl GameLoop, mut logical_map: LogicalMap, real_image: Arc<Mutex<ColorImage>>) {
+pub(crate) fn game_loop(
+    mut body: impl GameLoop, 
+    mut logical_map: LogicalMap, 
+    real_image: Arc<Mutex<ColorImage>>, 
+    input_channel: mpsc::Receiver<Box<dyn Any + Send>>,
+) {
+    let mut input = Box::new(()) as Box<dyn Any + Send>;
     loop {
-        if crate::CLOSING_REQUESTED.load(std::sync::atomic::Ordering::Acquire) {
+        if crate::CLOSING_REQUESTED.load(Ordering::Acquire) {
+            log::info!("Close requested! Exiting...");
             break;
         }
-        body();
+
+        input = match input_channel.try_recv() {
+            Ok(val) => val,
+            Err(e) => match e {
+                mpsc::TryRecvError::Empty => input,
+                mpsc::TryRecvError::Disconnected => { crate::CLOSING_REQUESTED.store(true, Ordering::Release); log::error!("Main thread disconnected! This is the final iteration."); input }
+            }
+        };
+        body(&input);
 
         if logical_map.updated {
             let mut image = real_image.lock().unwrap();
@@ -135,7 +150,15 @@ pub(crate) fn game_loop(mut body: impl GameLoop, mut logical_map: LogicalMap, re
     }
 }
 
+pub struct GameLoopInput;
 
-pub fn init_game_loop(game_loop_body: impl GameLoop, logical_map: LogicalMap, real_image: Arc<Mutex<ColorImage>>) {
-    let _ = std::thread::spawn(move || game_loop(game_loop_body, logical_map, real_image));
+pub fn init_game_loop(
+    game_loop_body: impl GameLoop, 
+    logical_map: LogicalMap, 
+    real_image: Arc<Mutex<ColorImage>>,
+) -> mpsc::Sender<Box<dyn Any + Send>> {
+    let (send, recv) = mpsc::channel();
+    let _ = std::thread::spawn(move || game_loop(game_loop_body, logical_map, real_image, recv,));
+
+    send
 }

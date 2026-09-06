@@ -1,7 +1,7 @@
-use std::{collections::HashSet, fmt::Debug, ops::Index, sync::{Arc, Mutex}};
+use std::{collections::HashSet, fmt::Debug, ops::Index, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
 use log::info;
-use crate::{game::{self, TileId}, utils::{self}};
+use crate::{game::{self, TileId}, utils::{self, ASSETS}};
 
 const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
@@ -13,7 +13,6 @@ pub struct Map {
     starting_rect: Rect,
     starting_diag: f32,
     raw_image: Arc<Mutex<ColorImage>>,
-    // unique: Rc<RefCell<ThreadUniqueGenerator>>,
     ctx: Context
 }
 
@@ -24,22 +23,25 @@ impl Map {
 
     }
 
+    pub fn ctx(&self) -> Context {
+        self.ctx.clone()
+    }
+
     fn update_point(point: &mut Pos2, cursor_coords: Vec2, scroll: f32, camera_coords: Vec2) {
         *point += (*point - camera_coords - cursor_coords).to_vec2() * scroll/SCROLL_SCALE;
     }
 
-    pub(crate) fn get_tile_id_from_cursor(&self, cursor_coords: Pos2) -> TileId {
+    pub(crate) fn get_tile_id_from_cursor(&self, cursor_coords: Pos2) -> Option<TileId> {
         let translated_pos = self.current_to_starting_coords(cursor_coords);
-        let color = self.get_color(translated_pos.x as isize, translated_pos.y as isize);
-        TileId::from(color)
+        self.get_color(translated_pos.x as isize, translated_pos.y as isize)
     }
 
-    fn get_color(&self, x: isize, y: isize) -> Color32 {
+    fn get_color(&self, x: isize, y: isize) -> Option<TileId> {
         let (Ok(x), Ok(y)) = (
             usize::try_from(x),
             usize::try_from(y)
-        ) else {return Color32::PLACEHOLDER};
-        *(self.ids_map.get((x, y)).unwrap_or(&Color32::PLACEHOLDER))
+        ) else {return None};
+        self.ids_map.get((x, y)).map(|&color| TileId::from(color))
     }
 
     fn current_to_starting_coords(&self, pos: Pos2) -> Pos2 {
@@ -101,9 +103,6 @@ pub trait MapDisplay {
         let cursor_coords = ui.input(|i| i.pointer.latest_pos().unwrap_or_default());
         let scroll = ui.input(|i| i.smooth_scroll_delta().y);
 
-        // if ui.input(|i| i.pointer.primary_clicked()) {
-        //     log::debug!("{:?}", self.map().handle_click(cursor_coords));
-        // }
 
         self.map().update(camera_coords, cursor_coords.to_vec2(), scroll);
     }
@@ -121,11 +120,10 @@ impl LoadMapError {
 pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::LogicalMap), LoadMapError> {
     const IDS_MAP_FILE_NAME: &str = "raw.png";
     const VISUAL_FILE_NAME: &str = "vis.png";
-    use std::path::Path;
     use std::sync::LazyLock;
-    static SAVES_DIR: LazyLock<&Path> = LazyLock::new(|| Path::new("saves"));
+    static MAPS_DIR: LazyLock<PathBuf> = LazyLock::new(|| ASSETS.join("maps"));
 
-    let dir_path = SAVES_DIR.join(directory_name);
+    let dir_path = MAPS_DIR.join(directory_name);
 
     let ids_map = utils::load_image_from_path(dir_path.join(IDS_MAP_FILE_NAME))
         .map_err(|e| LoadMapError::from_debug(e))?;
@@ -136,10 +134,6 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     let size = ids_map.size;
 
     let arc = Arc::new(Mutex::new(real_map_image));
-
-    let all_ids = ids_map.as_raw().chunks_exact(4)
-                                    .map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()) >> 8)
-                                    .fold(HashSet::with_capacity(5000), |mut acc, item| {acc.insert(item); acc});
     
     let length = ids_map.as_raw().chunks_exact(4).map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()) >> 8).max().expect("If there isn't a max there must've been no tiles") as usize;
 
@@ -151,5 +145,3 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     Ok((Map::new(arc, ids_map, starting_rect, ctx), logical_map))
 
 }
-
-//TODO: make laod_map load both graphical and logical map, so: 1) load ids_map, 2) load visual, 3) load (for now create) tiles 4) load textures from visual into tiles 5) return everything.
