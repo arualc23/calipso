@@ -1,5 +1,7 @@
 use egui_wgpu::wgpu;
 use egui_winit::winit::{self, event};
+use std::{sync::atomic::{AtomicBool, Ordering}, thread};
+use egui::ColorImage;
 
 mod wgpu_state;
 mod render;
@@ -9,18 +11,22 @@ use state::State;
 
 pub(crate) use render::EguiRenderer;
 
+use crate::game::{self, game_loop};
 
+pub(crate) static CLOSING_REQUESTED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Default)]
-pub(crate) struct ControlFlow<F: FnOnce(&EguiRenderer) -> Box<dyn State>> {
+pub(crate) struct ControlFlow<F: FnOnce(&render::EguiRenderer) -> (Box<dyn State>)> {
     state: Option<Box<dyn State>>,
     closing_requested: bool,
     wgpu_state: Option<WgpuState>,
     title: String,
-    initializer: Option<F>
+    initializer: Option<F>,
+    // game_loop_body: Option<G>,
+    // global: Arc<Mutex<game::Global>>
 }
 
-impl<F: FnOnce(&EguiRenderer) -> Box<dyn State>> ControlFlow<F> {
+impl<F: FnOnce(&render::EguiRenderer) -> (Box<dyn State>)> ControlFlow<F> {
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         println!("Resize called");
@@ -82,18 +88,26 @@ impl<F: FnOnce(&EguiRenderer) -> Box<dyn State>> ControlFlow<F> {
         }
     }
 
+    fn close(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        // self.global.lock().unwrap().closing_requested = true;
+        CLOSING_REQUESTED.store(true, Ordering::Release);
+        event_loop.exit();
+    }
+
     pub fn new(initializer: F, title: String) -> Self {
         Self {
             state: None,
             closing_requested: false,
             wgpu_state: None,
             title,
-            initializer: Some(initializer)
+            initializer: Some(initializer),
+            // game_loop_body: Some(body),
+            // global: Arc::new(Mutex::new(game::Global::default()))
         }
     }
 }
 
-impl<F: FnOnce(&render::EguiRenderer) -> Box<dyn State>> winit::application::ApplicationHandler for ControlFlow<F> {
+impl<F: FnOnce(&EguiRenderer) -> Box<dyn State>> winit::application::ApplicationHandler for ControlFlow<F> {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
 
         if self.wgpu_state.is_none() {
@@ -101,11 +115,15 @@ impl<F: FnOnce(&render::EguiRenderer) -> Box<dyn State>> winit::application::App
         }
 
         if self.state.is_none() {
-            self.state = Some(
-                (self.initializer.take().expect("Cannot initialize the window twice"))(&self.wgpu_state.as_ref().unwrap().egui)
-            );
+            let state = (self.initializer.take().expect("Cannot initialize the window twice"))(&self.wgpu_state.as_ref().unwrap().egui);
+            self.state = Some(state);
 
         }
+
+        // let game_loop_body = self.game_loop_body.take().unwrap();
+        // let global = self.global.clone();
+
+        // let _ = thread::spawn(move || game_loop(game_loop_body, global));
     }
 
     fn window_event(
@@ -123,7 +141,7 @@ impl<F: FnOnce(&render::EguiRenderer) -> Box<dyn State>> winit::application::App
         }
 
         match event {
-            event::WindowEvent::CloseRequested  => event_loop.exit(),
+            event::WindowEvent::CloseRequested  => self.close(&event_loop),
             event::WindowEvent::Resized(physical_size) => {
                 self.resize(physical_size);
             }
@@ -133,7 +151,7 @@ impl<F: FnOnce(&render::EguiRenderer) -> Box<dyn State>> winit::application::App
                     Ok(closing_requested) => {
                         if closing_requested {
                             println!("Manual exit called... ");
-                            event_loop.exit();
+                            self.close(&event_loop);
                             return;
                         }
                     }

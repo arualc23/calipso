@@ -1,7 +1,7 @@
-use std::{cell::RefCell, collections::HashSet, fmt::Debug, ops::Index, rc::Rc, sync::Arc};
+use std::{collections::HashSet, fmt::Debug, ops::Index, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
 use log::info;
-use crate::{game::{self, TileId}, map, utils::{self}};
+use crate::{game::{self, TileId}, utils::{self}};
 
 const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
@@ -12,7 +12,7 @@ pub struct Map {
     ids_map: ColorImage,
     starting_rect: Rect,
     starting_diag: f32,
-    raw_image: ColorImage,
+    raw_image: Arc<Mutex<ColorImage>>,
     // unique: Rc<RefCell<ThreadUniqueGenerator>>,
     ctx: Context
 }
@@ -50,15 +50,20 @@ impl Map {
         utils::load_texture_from_image(raw_image, ctx, "real_map_texture")
     }
 
-    fn update_texture(&mut self) {
-        self.texture = 
-            Self::get_new_texture(&self.raw_image, &self.ctx);
+    pub fn get_raw_image(&self) -> Arc<Mutex<ColorImage>> {
+        self.raw_image.clone()
     }
 
-    pub fn new(raw_image: ColorImage, ids_map: ColorImage, starting_rect: Rect, ctx: Context) -> Self {
+    fn update_texture(&mut self) {
+        let image = self.raw_image.lock().unwrap();
+        self.texture = 
+            Self::get_new_texture(&image, &self.ctx);
+    }
+
+    pub fn new(raw_image: Arc<Mutex<ColorImage>>, ids_map: ColorImage, starting_rect: Rect, ctx: Context) -> Self {
         let rect = starting_rect;
         let starting_diag = rect.size().length();
-        let texture = Self::get_new_texture(&raw_image, &ctx);
+        let texture = Self::get_new_texture(&raw_image.lock().unwrap(), &ctx);
         dbg!(ids_map.size);
         Self {
             texture,
@@ -130,6 +135,8 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     assert_eq!(ids_map.size, real_map_image.size);
     let size = ids_map.size;
 
+    let arc = Arc::new(Mutex::new(real_map_image));
+
     let all_ids = ids_map.as_raw().chunks_exact(4)
                                     .map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()) >> 8)
                                     .fold(HashSet::with_capacity(5000), |mut acc, item| {acc.insert(item); acc});
@@ -140,8 +147,8 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
 
     let logical_map = game::LogicalMap::new(tiles_container, size);
 
-    let starting_rect = Rect::from_min_max(Pos2::ZERO, pos2(real_map_image.size[0] as f32, real_map_image.size[1] as f32));
-    Ok((Map::new(real_map_image, ids_map, starting_rect, ctx), logical_map))
+    let starting_rect = Rect::from_min_max(Pos2::ZERO, pos2(size[0] as f32, size[1] as f32));
+    Ok((Map::new(arc, ids_map, starting_rect, ctx), logical_map))
 
 }
 

@@ -1,4 +1,5 @@
 #![feature(vec_from_fn)]
+#![feature(trait_alias)]
 
 use egui_winit::winit::{self, platform::wayland::EventLoopBuilderExtWayland};
 
@@ -6,6 +7,8 @@ pub mod window;
 pub mod map;
 mod utils;
 mod game;
+
+pub(crate) use window::CLOSING_REQUESTED;
 
 pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::state::State>, title: String) {
     #[cfg(test)]
@@ -34,7 +37,7 @@ use crate::map::MapDisplay;
         info!("Staritng test");
         init(|renderer| {
             let (map, lmap) = map::load_map("test1", renderer.ctx().clone()).unwrap();
-            Box::new(TestState::new(map))
+            Box::new(TestState::new(map, lmap))
         }, "Test".to_string());
         info!("After init");
     }
@@ -62,7 +65,8 @@ use crate::map::MapDisplay;
     }
 
     impl TestState {
-        pub fn new(map: map::Map) -> Self {
+        pub fn new(map: map::Map, logical_map: game::LogicalMap) -> Self {
+            game::init_game_loop(|| info!("Hello world!"), logical_map, map.get_raw_image());
             Self { map }
         }
         
