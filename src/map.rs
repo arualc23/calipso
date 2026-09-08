@@ -1,6 +1,5 @@
 use std::{collections::HashSet, fmt::Debug, ops::Index, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
-use log::info;
 use crate::{game::{self, TileId}, utils::{self, ASSETS}};
 
 const SCROLL_SCALE: f32 = 500.0;
@@ -33,6 +32,7 @@ impl Map {
 
     pub(crate) fn get_tile_id_from_cursor(&self, cursor_coords: Pos2) -> Option<TileId> {
         let translated_pos = self.current_to_starting_coords(cursor_coords);
+        // log::info!("{:?}", translated_pos);
         self.get_color(translated_pos.x as isize, translated_pos.y as isize)
     }
 
@@ -133,15 +133,21 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     assert_eq!(ids_map.size, real_map_image.size);
     let size = ids_map.size;
 
+    // dbg!(std::collections::HashSet::<[u8; 4]>::from_iter(ids_map.as_raw().clone().chunks_exact(4).map(|e| e.try_into().unwrap())));
+
     let arc = Arc::new(Mutex::new(real_map_image));
     
-    let length = ids_map.as_raw().chunks_exact(4).map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap()) >> 8).max().expect("If there isn't a max there must've been no tiles") as usize;
+    let length = 1+ ids_map.as_raw().chunks_exact(4).map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap())).max().expect("If there isn't a max there must've been no tiles") as usize;
+    log::info!("Loaded map with {length} tiles.");
 
     let tiles_container = game::TilesContainer::new(length, size);
+    log::debug!("created tiles container");
 
     let logical_map = game::LogicalMap::new(tiles_container, size);
+    log::debug!("created logical map");
 
     let starting_rect = Rect::from_min_max(Pos2::ZERO, pos2(size[0] as f32, size[1] as f32));
+    log::debug!("returning");
     Ok((Map::new(arc, ids_map, starting_rect, ctx), logical_map))
 
 }

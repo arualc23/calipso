@@ -1,8 +1,11 @@
-use std::{any::Any, ops::Index, sync::{Arc, Mutex, atomic::Ordering, mpsc}};
+use std::{collections::HashSet, ops::Index, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, Sender, TryRecvError}}};
 
-use egui::{Color32, ColorImage};
+use egui::{Color32, ColorImage, Context, Key, PointerState};
 
 use crate::utils;
+
+pub mod interface;
+use interface::{FullMessage, GameLoop, InputSnapshot};
 
 pub const NULL: Color32 = Color32::from_rgba_premultiplied(0, 0 ,0, 0);
 
@@ -12,9 +15,15 @@ pub struct Player {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub(crate) struct TileId {
+pub struct TileId {
     inner: u32
 } 
+
+impl std::fmt::Display for TileId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
 
 impl TileId {
     pub fn new(inner: u32) -> Self {
@@ -26,9 +35,11 @@ impl TileId {
 
 impl From<Color32> for TileId {
     fn from(value: Color32) -> Self {
-        let inner: u32 = (value.r() as u32) << 16 +
-                         (value.g() as u32) << 8 +
-                         (value.b() as u32) << 0;
+        // log::info!("{:?}", value);
+        let inner: u32 = ((value.r() as u32) << 24 ) |
+                         ((value.g() as u32) << 16 ) |
+                         ((value.b() as u32) << 8  ) |
+                         ((value.a() as u32));
         Self { inner }
     }
 }
@@ -49,7 +60,7 @@ impl Tile {
 
         let iter = utils::color_image_to_iter(&self.raw_texture).enumerated();
         for (pos, &color) in iter {
-            canvas[pos] = canvas[pos].blend(color);
+            canvas[pos] = color;
         }
     }
 
@@ -106,6 +117,7 @@ impl LogicalMap {
     pub(crate) fn new(map: TilesContainer, size: [usize; 2]) -> Self {
         let mut real_image = utils::empty_image(size);
         for tile in map.iter() {
+            log::info!("iteration, tile {:?}", tile.id);
             tile.paste_onto_canvas(&mut real_image);
         }
 
@@ -117,16 +129,18 @@ impl LogicalMap {
     }
 }
 
-pub trait GameLoop = FnMut(&Box<dyn Any + Send>) + Send + 'static;
 
 
-pub(crate) fn game_loop(
-    mut body: impl GameLoop, 
+pub(crate) fn game_loop<Msg>(
+    mut body: impl GameLoop<Msg>, 
     mut logical_map: LogicalMap, 
     real_image: Arc<Mutex<ColorImage>>, 
-    input_channel: mpsc::Receiver<Box<dyn Any + Send>>,
-) {
-    let mut input = Box::new(()) as Box<dyn Any + Send>;
+    input_channel: mpsc::Receiver<FullMessage<Msg>>,
+) 
+where
+    Msg: Default
+{
+    let mut input = <(InputSnapshot, Msg)>::default();
     loop {
         if crate::CLOSING_REQUESTED.load(Ordering::Acquire) {
             log::info!("Close requested! Exiting...");
@@ -135,9 +149,12 @@ pub(crate) fn game_loop(
 
         input = match input_channel.try_recv() {
             Ok(val) => val,
-            Err(e) => match e {
-                mpsc::TryRecvError::Empty => input,
-                mpsc::TryRecvError::Disconnected => { crate::CLOSING_REQUESTED.store(true, Ordering::Release); log::error!("Main thread disconnected! This is the final iteration."); input }
+            Err(e) => {
+                if let TryRecvError::Disconnected = e {
+                    crate::CLOSING_REQUESTED.store(true, Ordering::Release);
+                    log::error!("Main thread disconnected! This is the final iteration."); 
+                }
+                input
             }
         };
         body(&input);
@@ -150,15 +167,4 @@ pub(crate) fn game_loop(
     }
 }
 
-pub struct GameLoopInput;
 
-pub fn init_game_loop(
-    game_loop_body: impl GameLoop, 
-    logical_map: LogicalMap, 
-    real_image: Arc<Mutex<ColorImage>>,
-) -> mpsc::Sender<Box<dyn Any + Send>> {
-    let (send, recv) = mpsc::channel();
-    let _ = std::thread::spawn(move || game_loop(game_loop_body, logical_map, real_image, recv,));
-
-    send
-}

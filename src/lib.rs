@@ -6,9 +6,7 @@ use egui_winit::winit::{self, platform::wayland::EventLoopBuilderExtWayland};
 pub mod window;
 pub mod map;
 mod utils;
-mod game;
-
-pub use game::init_game_loop;
+pub mod game;
 
 pub(crate) use window::CLOSING_REQUESTED;
 
@@ -70,7 +68,7 @@ use crate::map::MapDisplay;
 
     impl TestState {
         pub fn new(map: map::Map, logical_map: game::LogicalMap) -> Self {
-            let send = game::init_game_loop(|_input| info!("Hello world!"), logical_map, map.get_raw_image());
+            let send = game::interface::init_game_loop(|(input, msg): &(_, ())| info!("Hello world!"), logical_map, map.get_raw_image());
             Self { map }
         }
         
