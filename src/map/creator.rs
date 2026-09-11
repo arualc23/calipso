@@ -35,9 +35,7 @@ fn binary_search_biggest_rect(color: Color32, center: Pos2, image: &ColorImage) 
 
     match vector.binary_search_by(|&r| {
         let rect = Rect::from_center_size(center, vec2(r as f32, r as f32));
-        dbg!(&rect);
         let image_part = image.region(&rect, None);
-        dbg!(&image_part);
         if color_image_to_iter(&image_part).any(|pixel| *pixel != color) {std::cmp::Ordering::Greater}
         else {std::cmp::Ordering::Less}
     }) {

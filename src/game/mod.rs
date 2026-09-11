@@ -1,8 +1,8 @@
-use std::{collections::HashSet, ops::{Add, Index, IndexMut}, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, Sender, TryRecvError}}};
+use std::{cell::UnsafeCell, collections::HashSet, ops::{Add, Deref, DerefMut, Index, IndexMut}, range::Range, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, Sender, TryRecvError}}};
 
 use egui::{Color32, ColorImage, Context, Key, PointerState};
 
-use crate::utils;
+use crate::{consts, map::IdsMap, utils::{self, color_image_to_iter}};
 
 pub mod interface;
 use interface::{FullMessage, GameLoop, InputSnapshot};
@@ -132,6 +132,7 @@ impl Iterator for TileIdIter {
 //     }
 // }
 
+#[derive(Debug, Clone)]
 pub(crate) struct Tile {
     id: TileId,
     raw_texture: ColorImage,
@@ -143,7 +144,15 @@ impl Tile {
 
         let iter = utils::color_image_to_iter(&self.raw_texture).enumerated();
         for (pos, &color) in iter {
+            // if color == Color32::TRANSPARENT && canvas[pos] != color { log::info!("what"); }
+            if color == Color32::TRANSPARENT { continue; }
             canvas[pos] = color;
+        }
+    }
+
+    fn paste_from_image(&mut self, image: impl AsRef<ColorImage>, ids_map: impl AsRef<IdsMap>) {
+        for (pos, pixel) in color_image_to_iter(image.as_ref()).enumerated().filter(|(pos, _)| self.id == ids_map.as_ref()[*pos].into()) {
+            self.raw_texture[pos] = *pixel;
         }
     }
 
@@ -171,6 +180,10 @@ impl TilesContainer {
 
     pub fn iter(&self) -> core::slice::Iter<'_, Tile> {
         self.inner.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, Tile> {
+        self.inner.iter_mut()
     }
 }
 
@@ -225,6 +238,19 @@ impl<T> IndexMut<TileId> for IndexedByTileId<T> {
     }
 }
 
+impl<T> std::ops::Deref for IndexedByTileId<T> {
+    type Target = Vec<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> std::ops::DerefMut for IndexedByTileId<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
 pub struct LogicalMap {
     map: TilesContainer,
     real_image: ColorImage,
@@ -232,29 +258,128 @@ pub struct LogicalMap {
 }
 
 impl LogicalMap {
-    fn export_real_image(&self) -> &ColorImage {
+    pub fn get_real_image(&self) -> &ColorImage {
         &self.real_image
     }
     fn update_tile_texture(&mut self, tile_id: TileId) {
         self.map[tile_id].paste_onto_canvas(&mut self.real_image);
     }
 
-    pub(crate) fn new(map: TilesContainer, size: [usize; 2]) -> Self {
-        let mut real_image = utils::empty_image(size);
-        for tile in map.iter() {
-            log::info!("iteration, tile {:?}", tile.id);
-            tile.paste_onto_canvas(&mut real_image);
-        }
+    pub(crate) fn new(real_image: Arc<ColorImage>, ids_map: Arc<IdsMap>) -> Self {
 
-        Self {
-            map,
-            real_image,
-            updated: true,
-        }
+        let length = ids_map.max().into();
+        let mut map = TilesContainer::new(length, real_image.size);
+        let chunks = map.inner.chunks_mut(length.div_ceil(consts::PROCESS_COUNT));
+        
+
+        // let arc_ids_map = Arc::new(ids_map);
+
+        std::thread::scope(|s| {
+            let mut processes = [const {None}; consts::PROCESS_COUNT];
+            for (i, chunk) in chunks.enumerate() {
+                let real_image = real_image.clone();
+                let ids_map = ids_map.clone();
+                processes[i] = Some(s.spawn(move || {
+                    for tile in chunk {
+                        tile.paste_from_image(real_image.clone(), ids_map.clone());
+                    }
+                }));
+            }
+
+            processes.into_iter().for_each(|option| {option.and_then(|handle| Some(handle.join()));});
+        });
+
+        
+
+        
+
+        Self { map, real_image: (*real_image).clone(), updated: false }
+    }
+
+    // pub(crate) fn new(map: TilesContainer, size: [usize; 2]) -> Self {
+    //     let mut real_image = utils::empty_image(size);
+        
+    //     // for tile in map.iter() {
+    //     //     log::info!("iteration, tile {:?}", tile.id);
+    //     //     tile.paste_onto_canvas(&mut real_image);
+    //     // }
+
+    //     // paste_all_onto_canvas(&map, &mut real_image);
+
+    //     Self {
+    //         map,
+    //         real_image,
+    //         updated: true,
+    //     }
+    // }
+}
+
+struct UnsafePointer<T> (*const T);
+
+// impl<T> Deref for UnsafePointer<T> {
+//     type Target = *const T;
+
+//     fn deref(&self) -> &Self::Target {
+//         &self.0
+//     }
+// }
+
+unsafe impl<T> Send for UnsafePointer<T> {}
+
+struct UnsafeImagePointer {
+    inner: *mut ColorImage
+}
+
+impl Clone for UnsafeImagePointer {
+    fn clone(&self) -> Self {
+        Self {inner: self.inner}
+    }
+}
+
+impl UnsafeImagePointer {
+    fn get(&mut self) -> &mut ColorImage {
+        unsafe {self.inner.as_mut_unchecked()}
+    }
+}
+
+unsafe impl Send for UnsafeImagePointer {}
+unsafe impl Sync for UnsafeImagePointer {}
+
+struct PointerIterator<T>(std::ops::Range<*const T>);
+impl<T: Clone> Iterator for PointerIterator<T> {
+    type Item = *const T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.is_empty() { return None; }
+        let res = self.0.start;
+        unsafe { self.0.start = self.0.start.add(1); }
+        Some(res)
     }
 }
 
 
+fn paste_all_onto_canvas(map: &TilesContainer, canvas: &mut ColorImage) {
+    const PROCESS_COUNT: usize = 16;
+    // let cell = UnsafeCell::new(canvas);
+    let image = UnsafeImagePointer { inner: canvas as *mut ColorImage };
+    let max = map.inner.inner.len();
+    let chunks = map.inner.chunks(max.div_ceil(PROCESS_COUNT) );
+    let mut processes = [const {None}; PROCESS_COUNT];
+    for (i, chunk) in chunks.enumerate() {
+        let chunk = chunk.as_ptr_range();
+        let iter: Vec<_> = PointerIterator(chunk).map(|item| UnsafePointer(item)).collect();
+        let image = image.clone();
+        processes[i] = Some(std::thread::spawn(move || {
+            let mut tmp = image;
+            let image = tmp.get();
+            for tile in iter {
+                unsafe {(*tile.0).paste_onto_canvas(image)};
+            }
+        }));
+    }
+
+    for mut process in processes {let _ = process.take().and_then(|handle| Some(handle.join().unwrap())); }
+}
 
 pub(crate) fn game_loop<Msg>(
     mut body: impl GameLoop<Msg>, 

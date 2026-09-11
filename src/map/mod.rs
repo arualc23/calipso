@@ -6,6 +6,7 @@ const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
 pub mod creator;
 
+#[derive(Debug, Clone)]
 pub struct IdsMap {
     inner: ColorImage,
     max_id: TileId,
@@ -207,25 +208,21 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     assert_eq!(ids_map.size, real_map_image.size);
     let size = ids_map.size;
 
-    
-
-    // dbg!(std::collections::HashSet::<[u8; 4]>::from_iter(ids_map.as_raw().clone().chunks_exact(4).map(|e| e.try_into().unwrap())));
-
-    let arc = Arc::new(Mutex::new(real_map_image));
+    let ids_map = IdsMap::new(ids_map, Some(50)).ok_or(LoadMapError("Tile ids not unique".to_string()))?;
     
     let length = 1+ ids_map.as_raw().chunks_exact(4).map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap())).max().expect("If there isn't a max there must've been no tiles") as usize;
     log::info!("Loaded map with {length} tiles.");
 
-    let tiles_container = game::TilesContainer::new(length, size);
-    log::debug!("created tiles container");
+    let arc_ids_map = Arc::new(ids_map);
+    let arc_real_map_image = Arc::new(real_map_image);
+    let logical_map = game::LogicalMap::new(arc_real_map_image, arc_ids_map.clone());
+    let ids_map = Arc::into_inner(arc_ids_map).expect("All threads must be joined by now");
 
-    let logical_map = game::LogicalMap::new(tiles_container, size);
-    log::debug!("created logical map");
+    let raw_image = Arc::new(Mutex::new(logical_map.get_real_image().clone()));
 
     let starting_rect = Rect::from_min_max(Pos2::ZERO, pos2(size[0] as f32, size[1] as f32));
-    let ids_map = IdsMap::new(ids_map, Some(50)).ok_or(LoadMapError("Tile ids not unique".to_string()))?;
     let bboxes = creator::compute_bbox(&ids_map);
-    log::debug!("returning");
-    Ok((Map::new(arc, ids_map, starting_rect, ctx, bboxes), logical_map))
+
+    Ok((Map::new(raw_image, ids_map, starting_rect, ctx, bboxes), logical_map))
 
 }
