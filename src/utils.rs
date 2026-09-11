@@ -25,17 +25,31 @@ pub fn load_image_from_path(path: impl AsRef<std::path::Path>) -> Result<ColorIm
     Ok(color_image)
 }
 
-pub fn load_texture_from_image(image: &ColorImage, ctx: &Context, name: impl Into<String>) -> Arc<TextureHandle> {
+pub enum TextureOptions {
+    Exact,
+    Smooth,
+}
+
+impl Into<egui::TextureOptions> for TextureOptions {
+    fn into(self) -> egui::TextureOptions {
+        match self {
+            Self::Exact => egui::TextureOptions::NEAREST,
+            Self::Smooth => egui::TextureOptions::LINEAR,
+        }
+    }
+}
+
+pub fn load_texture_from_image(image: &ColorImage, ctx: &Context, name: impl Into<String>, options: TextureOptions) -> Arc<TextureHandle> {
     Arc::new(ctx.load_texture(
         name, 
         image.clone(), 
-        egui::TextureOptions::NEAREST,
+        options.into()
     ))
 }
 
-pub fn load_texture_from_path(path: impl AsRef<std::path::Path>, ctx: &Context, name: impl Into<String>) -> Result<Arc<TextureHandle>, image::ImageError> {
+pub fn load_texture_from_path(path: impl AsRef<std::path::Path>, ctx: &Context, name: impl Into<String>, options: TextureOptions) -> Result<Arc<TextureHandle>, image::ImageError> {
     let color_image = load_image_from_path(path)?;
-    Ok(load_texture_from_image(&color_image, ctx, name))
+    Ok(load_texture_from_image(&color_image, ctx, name, options))
 }
 
 // /// # Panics

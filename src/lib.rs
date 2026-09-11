@@ -5,10 +5,14 @@ use egui_winit::winit::{self, platform::wayland::EventLoopBuilderExtWayland};
 
 pub mod window;
 pub mod map;
-mod utils;
+pub mod utils;
 pub mod game;
+pub mod unit_display;
+
+pub mod consts;
 
 pub(crate) use window::CLOSING_REQUESTED;
+pub use consts::*;
 
 pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::state::State>, title: String) {
     #[cfg(test)]
@@ -27,10 +31,12 @@ pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::s
 #[cfg(test)]
 mod tests {
 
-use crate::map::MapDisplay;
+use crate::{unit_display::UnitDisplay};
 
     use super::*;
-    #[allow(unused_imports)]
+    // use egui::{Color32, Painter, Rect, pos2, vec2};
+    use egui::Painter;
+#[allow(unused_imports)]
     use log::{debug, error, info, warn};
 
     #[test]
@@ -45,21 +51,16 @@ use crate::map::MapDisplay;
     }
 
     struct TestState {
-        map: map::Map
-    }
-
-    impl MapDisplay for TestState {
-        fn map(&mut self) -> &mut map::Map {
-            &mut self.map
-        }
+        map: map::Map,
+        // unit_texture: Texture,
+        units: Vec<unit_display::UnitDisplay>,
     }
 
     impl window::state::State for TestState {
         fn run_frame(&mut self, ui: &mut egui_winit::egui::Ui) {
 
-            let painter = ui.debug_painter();
-            self.paint_map(ui, &painter);
-
+            let painter = ui.layer_painter(*BACKGROUND_LAYER);
+            self.map.run_frame(ui, Some(&painter), &self.units);
         }
         fn transition(&mut self) -> Option<Box<dyn window::state::State>> {
             None
@@ -68,8 +69,12 @@ use crate::map::MapDisplay;
 
     impl TestState {
         pub fn new(map: map::Map, logical_map: game::LogicalMap) -> Self {
+            let unit_texture = utils::load_texture_from_path("assets/textures/unit.png", &map.ctx(), "unit", utils::TextureOptions::Smooth).unwrap();
+
             let send = game::interface::init_game_loop(|(input, msg): &(_, ())| info!("Hello world!"), logical_map, map.get_raw_image());
-            Self { map }
+            let _ = Box::leak(Box::new(send)); //so that main loop doesn't exit immediately
+
+            Self { map, units: vec![UnitDisplay::new(0.into(), unit_texture)] }
         }
         
     }

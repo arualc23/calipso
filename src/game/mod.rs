@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ops::Index, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, Sender, TryRecvError}}};
+use std::{collections::HashSet, ops::{Add, Index, IndexMut}, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, Sender, TryRecvError}}};
 
 use egui::{Color32, ColorImage, Context, Key, PointerState};
 
@@ -14,7 +14,7 @@ pub struct Player {
     id: PlayerId
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct TileId {
     inner: u32
 } 
@@ -40,7 +40,25 @@ impl From<Color32> for TileId {
                          ((value.g() as u32) << 16 ) |
                          ((value.b() as u32) << 8  ) |
                          ((value.a() as u32));
+        // let inner = unsafe {(&raw const value).cast::<u32>().read() };
         Self { inner }
+    }
+}
+
+impl Into<Color32> for TileId {
+    fn into(self) -> Color32 {
+        Color32::from_rgba_premultiplied(
+            (self.inner >> 24) as u8,
+            (self.inner >> 16) as u8,
+            (self.inner >>  8) as u8,
+            (self.inner >>  0) as u8,
+        )
+    }
+}
+
+impl Into<usize> for TileId {
+    fn into(self) -> usize {
+        self.inner as usize
     }
 }
 
@@ -50,9 +68,74 @@ impl From<usize> for TileId {
     }
 }
 
+impl Add<u32> for TileId {
+    type Output = TileId;
+    fn add(self, rhs: u32) -> Self::Output {
+        Self {inner: self.inner + rhs}
+    }
+}
+
+///end excluded, start included
+pub struct TileIdIter {
+    current: TileId,
+    end: Option<TileId>,
+}
+
+impl TileIdIter {
+    pub fn new(start: impl Into<TileId>, end: impl Into<Option<TileId>>) -> Self {
+        Self {
+            current: start.into(),
+            end: end.into()
+        }
+    }
+}
+
+impl Iterator for TileIdIter {
+    type Item = TileId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(end) = self.end && self.current >= end { return None; }
+        let res = self.current;
+        self.current = self.current + 1;
+
+        Some(res)
+    }
+}
+
+
+// pub struct TileIdRange {
+//     start: TileId,
+//     end: TileId,
+//     start_exclusive: bool,
+//     end_exclusive: bool,
+// }
+
+// impl TileIdRange {
+//     ///Returns None if end >= start.
+//     pub fn new(start: impl Into<TileId>, end: impl Into<TileId>, start_exclusive: bool, end_exclusive: bool) -> Option<Self> {
+//         let (start, end) = (start.into(), end.into());
+//         if start < end {
+//             Some(Self { start, end, start_exclusive, end_exclusive })
+//         } else { None }
+//     }
+// }
+
+// impl std::ops::RangeBounds<TileId> for TileIdRange {
+//     fn start_bound(&self) -> std::ops::Bound<&TileId> {
+//         if self.start_exclusive {std::ops::Bound::Excluded(&self.start)}
+//         else {std::ops::Bound::Included(&self.start)}
+//     }
+
+//     fn end_bound(&self) -> std::ops::Bound<&TileId> {
+//         if self.end_exclusive {std::ops::Bound::Excluded(&self.end)}
+//         else {std::ops::Bound::Included(&self.end)}
+//     }
+// }
+
 pub(crate) struct Tile {
     id: TileId,
     raw_texture: ColorImage,
+
 }
 
 impl Tile {
@@ -73,19 +156,17 @@ impl Tile {
 }
 
 pub(crate) struct TilesContainer {
-    inner: Vec<Tile>
+    inner: IndexedByTileId<Tile>
 }
 
 impl TilesContainer {
     pub fn new(length: usize, size: [usize; 2]) -> Self {
-        let inner = Vec::from_fn(length, |id| Tile::empty(TileId::from(id), size));
+        let inner = IndexedByTileId::new(Vec::from_fn(length, |id| Tile::empty(TileId::from(id), size)));
         Self { inner }
     }
 
     pub fn iter_ids(&self) -> Box<dyn Iterator<Item = TileId>> {
-        Box::new(
-            (0..self.inner.len()).map(|item| TileId::from(item))
-        )
+        self.inner.iter_ids()
     }
 
     pub fn iter(&self) -> core::slice::Iter<'_, Tile> {
@@ -96,7 +177,51 @@ impl TilesContainer {
 impl Index<TileId> for TilesContainer {
     type Output = Tile;
     fn index(&self, index: TileId) -> &Self::Output {
+        &self.inner[index]
+    }
+}
+
+pub struct IndexedByTileId<T> {
+    inner: Vec<T>
+}
+
+impl<T> IndexedByTileId<T> {
+    pub fn new(inner: Vec<T>) -> Self {
+        Self { inner }
+    }
+
+    pub fn with_repeated(value: T, size: usize) -> Self 
+    where
+        T :Clone
+    {
+        Self { inner: vec![value; size] }
+    }
+
+    pub fn iter_ids(&self) -> Box<dyn Iterator<Item = TileId>> {
+        Box::new(
+            (0..self.inner.len()).map(|item| TileId::from(item))
+        )
+    }
+
+    pub fn iter(&self) -> core::slice::Iter<'_, T> {
+        self.inner.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
+        self.inner.iter_mut()
+    }
+}
+
+impl<T> Index<TileId> for IndexedByTileId<T> {
+    type Output = T;
+    fn index(&self, index: TileId) -> &Self::Output {
         &self.inner[index.inner as usize]
+    }
+}
+
+impl<T> IndexMut<TileId> for IndexedByTileId<T> {
+    fn index_mut(&mut self, index: TileId) -> &mut Self::Output {
+        &mut self.inner[index.inner as usize]
     }
 }
 
