@@ -48,7 +48,7 @@ impl DerefMut for IdsMap {
 }
 
 pub struct Map {
-    texture: Arc<TextureHandle>,
+    texture: TextureHandle,
     rect: Rect,
     ids_map: IdsMap,
     starting_rect: Rect,
@@ -95,7 +95,7 @@ impl Map {
         self.starting_rect.min + (pos - self.rect.min)/self.rect.size().length()*self.starting_diag
     }
 
-    fn get_new_texture(raw_image: &ColorImage, ctx: &Context, options: utils::TextureOptions) -> Arc<TextureHandle> {
+    fn get_new_texture(raw_image: &ColorImage, ctx: &Context, options: utils::TextureOptions) -> TextureHandle {
         utils::load_texture_from_image(raw_image, ctx, "real_map_texture", options)
     }
 
@@ -211,7 +211,7 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     let ids_map = IdsMap::new(ids_map, Some(50)).ok_or(LoadMapError("Tile ids not unique".to_string()))?;
     
     let length = 1+ ids_map.as_raw().chunks_exact(4).map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap())).max().expect("If there isn't a max there must've been no tiles") as usize;
-    log::info!("Loaded map with {length} tiles.");
+    log::info!("Loading map with {length} tiles.");
 
     let arc_ids_map = Arc::new(ids_map);
     let arc_real_map_image = Arc::new(real_map_image);
