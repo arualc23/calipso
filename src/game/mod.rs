@@ -1,8 +1,8 @@
-use std::{ops::{Add, Index, IndexMut}, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, TryRecvError}}};
+use std::{sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, TryRecvError}}};
 
 use egui::{Color32, ColorImage};
 
-use crate::{consts, map::IdsMap, utils::{self, color_image_to_iter}, tile};
+use crate::{consts, map::IdsMap, tile};
 
 pub mod interface;
 use interface::{FullMessage, GameLoop, InputSnapshot};
@@ -57,72 +57,6 @@ impl LogicalMap {
     }
 }
 
-// struct UnsafePointer<T> (*const T);
-
-// impl<T> Deref for UnsafePointer<T> {
-//     type Target = *const T;
-
-//     fn deref(&self) -> &Self::Target {
-//         &self.0
-//     }
-// }
-
-// unsafe impl<T> Send for UnsafePointer<T> {}
-
-// struct UnsafeImagePointer {
-//     inner: *mut ColorImage
-// }
-
-// impl Clone for UnsafeImagePointer {
-//     fn clone(&self) -> Self {
-//         Self {inner: self.inner}
-//     }
-// }
-
-// impl UnsafeImagePointer {
-//     fn get(&mut self) -> &mut ColorImage {
-//         unsafe {self.inner.as_mut_unchecked()}
-//     }
-// }
-
-// unsafe impl Send for UnsafeImagePointer {}
-// unsafe impl Sync for UnsafeImagePointer {}
-
-// struct PointerIterator<T>(std::ops::Range<*const T>);
-// impl<T: Clone> Iterator for PointerIterator<T> {
-//     type Item = *const T;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if self.0.is_empty() { return None; }
-//         let res = self.0.start;
-//         unsafe { self.0.start = self.0.start.add(1); }
-//         Some(res)
-//     }
-// }
-
-
-// fn paste_all_onto_canvas(map: &TilesContainer, canvas: &mut ColorImage) {
-//     const PROCESS_COUNT: usize = 16;
-//     // let cell = UnsafeCell::new(canvas);
-//     let image = UnsafeImagePointer { inner: canvas as *mut ColorImage };
-//     let max = map.inner.inner.len();
-//     let chunks = map.inner.chunks(max.div_ceil(PROCESS_COUNT) );
-//     let mut processes = [const {None}; PROCESS_COUNT];
-//     for (i, chunk) in chunks.enumerate() {
-//         let chunk = chunk.as_ptr_range();
-//         let iter: Vec<_> = PointerIterator(chunk).map(|item| UnsafePointer(item)).collect();
-//         let image = image.clone();
-//         processes[i] = Some(std::thread::spawn(move || {
-//             let mut tmp = image;
-//             let image = tmp.get();
-//             for tile in iter {
-//                 unsafe {(*tile.0).paste_onto_canvas(image)};
-//             }
-//         }));
-//     }
-
-//     for mut process in processes {let _ = process.take().and_then(|handle| Some(handle.join().unwrap())); }
-// }
 
 pub(crate) fn game_loop<Msg>(
     mut body: impl GameLoop<Msg>, 
