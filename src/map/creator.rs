@@ -1,12 +1,12 @@
 use egui::{Color32, ColorImage, Pos2, Rect, pos2, vec2};
 
-use crate::{tile::{IndexedByTileId, TileIdIter, TileId}, map::IdsMap, utils::color_image_to_iter};
+use crate::{id::{IdIterator, IndexedBy}, map::IdsMap, tile::TileId, utils::color_image_to_iter};
 
-pub type Bboxes = IndexedByTileId<Rect>;
+pub type Bboxes = IndexedBy<TileId, Rect>;
 
 pub fn compute_bbox(map: &IdsMap) -> Bboxes {
-    let mut res = IndexedByTileId::with_repeated(Rect::ZERO, <TileId as Into<usize>>::into(map.max()) + 1);
-    for id in TileIdIter::new(0, map.max() + 1) {
+    let mut res = IndexedBy::filled(<TileId as Into<usize>>::into(map.max()) + 1, Rect::ZERO,);
+    for id in IdIterator::new(0.into(), map.max()) {
         let color = id.into();
         let center = find_center(color, &*map);
         let radius = binary_search_biggest_rect(color, center, &*map) as f32 * 2.0;

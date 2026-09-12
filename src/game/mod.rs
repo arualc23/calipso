@@ -1,18 +1,18 @@
-use std::{sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, TryRecvError}}};
+use std::{marker::PhantomData, ops::{Index, IndexMut}, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, TryRecvError}}};
 
 use egui::{Color32, ColorImage};
 
 use crate::{consts, map::IdsMap, tile};
 
 pub mod interface;
+pub mod unit;
+pub mod player;
+
 use interface::{FullMessage, GameLoop, InputSnapshot};
 
 pub const NULL: Color32 = Color32::from_rgba_premultiplied(0, 0 ,0, 0);
 
-pub struct PlayerId;
-pub struct Player {
-    id: PlayerId
-}
+
 
 pub struct LogicalMap {
     map: tile::TilesContainer,
@@ -49,10 +49,6 @@ impl LogicalMap {
             processes.into_iter().for_each(|option| {option.and_then(|handle| Some(handle.join()));});
         });
 
-        
-
-        
-
         Self { map, real_image: (*real_image).clone(), updated: false }
     }
 }
@@ -63,6 +59,7 @@ pub(crate) fn game_loop<Msg>(
     mut logical_map: LogicalMap, 
     real_image: Arc<Mutex<ColorImage>>, 
     input_channel: mpsc::Receiver<FullMessage<Msg>>,
+    mut units: unit::UnitStorage,
 ) 
 where
     Msg: Default

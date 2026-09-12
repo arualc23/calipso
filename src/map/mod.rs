@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt::Debug, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
-use crate::{BACKGROUND_LAYER, game::{self}, map::creator::Bboxes, unit_display::UnitDisplay, utils::{self, ASSETS, color_image_to_iter}, tile::{TileId, TileIdIter}};
+use crate::{BACKGROUND_LAYER, game::{self}, map::creator::Bboxes, tile::TileId, unit_display::UnitDisplay, utils::{self, ASSETS, color_image_to_iter}, id::IdIterator};
 
 const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
@@ -20,7 +20,7 @@ impl IdsMap {
         }
 
         let &max = all_ids.iter().max()?;
-        let iter = TileIdIter::new(0, Some(max + 1));
+        let iter = IdIterator::new(0.into(), max);
         for i in iter {
             if !all_ids.contains(&TileId::from(i)) { return None; }
         }

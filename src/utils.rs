@@ -1,4 +1,4 @@
-use std::{path::Path, sync::{LazyLock}};
+use std::{marker::PhantomData, ops::{Add, AddAssign, Deref, DerefMut, Index, IndexMut}, path::Path, sync::LazyLock};
 
 use egui::{ColorImage, Context, TextureHandle};
 
@@ -139,4 +139,15 @@ pub fn color_image_to_iter(color_image: &ColorImage) -> ColorImageIter<'_> {
 #[inline]
 pub fn empty_image(size: [usize; 2]) -> ColorImage {
     ColorImage::new(size, vec![game::NULL; size[0] * size[1]])
+}
+
+
+
+pub(crate) fn has_duplicates<T: PartialEq>(slice: &[T]) -> bool {
+    for i in 1..slice.len() {
+        if slice[i..].contains(&slice[i - 1]) {
+            return true;
+        }
+    }
+    false
 }
