@@ -1,4 +1,4 @@
-use std::{path::Path, sync::{Arc, LazyLock}};
+use std::{path::Path, sync::{LazyLock}};
 
 use egui::{ColorImage, Context, TextureHandle};
 
@@ -51,71 +51,6 @@ pub fn load_texture_from_path(path: impl AsRef<std::path::Path>, ctx: &Context, 
     let color_image = load_image_from_path(path)?;
     Ok(load_texture_from_image(&color_image, ctx, name, options))
 }
-
-// /// # Panics
-// ///If improper indexing is attempted
-// pub fn paste<T: Copy>(
-//     src: &[T],
-//     src_width: usize,
-//     dst: &mut [T],
-//     dst_width: usize,
-//     x: usize,
-//     y: usize,
-// ) {
-//     let height = src.len() / src_width;
-
-//     for row in 0..height {
-//         let src_start = row * src_width;
-//         let dst_start = (y + row) * dst_width + x;
-
-//         dst[dst_start..dst_start + src_width] 
-//             .copy_from_slice(&src[src_start..src_start + src_width]);
-//     }
-// }
-
-
-// /// # Returns
-// /// Raw vector, width, height, x_offset, y_offset
-// pub fn crop<T: PartialEq + Default + Copy>(
-//     data: &[T],
-//     width: usize,
-// ) -> Option<(Vec<T>, usize, usize, usize, usize)> {
-//     let height = data.len() / width;
-
-//     let mut min_x = width;
-//     let mut min_y = height;
-//     let mut max_x = 0;
-//     let mut max_y = 0;
-
-//     for y in 0..height {
-//         for x in 0..width {
-//             if data[y * width + x] != T::default() {
-//                 min_x = min_x.min(x);
-//                 min_y = min_y.min(y);
-//                 max_x = max_x.max(x);
-//                 max_y = max_y.max(y);
-//             }
-//         }
-//     }
-
-//     // Nothing but zeros
-//     if min_x == width {
-//         return None;
-//     }
-
-//     let new_width = max_x - min_x + 1;
-//     let new_height = max_y - min_y + 1;
-
-//     let mut result = Vec::with_capacity(new_width * new_height);
-
-//     for y in min_y..=max_y {
-//         let start = y * width + min_x;
-//         let end = start + new_width;
-//         result.extend_from_slice(&data[start..end]);
-//     }
-
-//     Some((result, new_width, new_height, min_x, min_y))
-// }
 
 pub struct ColorImageIter<'a> {
     inner: &'a ColorImage,

@@ -1,4 +1,3 @@
-// use egui_winit::egui::UiBuilder;
 use egui_winit::{egui};
 
 use egui::epaint::Shadow;
@@ -85,7 +84,6 @@ impl EguiRenderer {
 
         let full_output = self.ctx().run_ui(raw_input, |ui| {
             run_ui(ui);
-            // ui.label("test");
         });
 
         self.state

@@ -1,6 +1,6 @@
 use egui::TextureHandle;
 
-use crate::{game, map};
+use crate::{game};
 
 #[derive(getset::CloneGetters)]
 #[getset(get_clone = "pub")]

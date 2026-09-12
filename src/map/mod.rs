@@ -79,7 +79,6 @@ impl Map {
 
     pub(crate) fn get_tile_id_from_cursor(&self, cursor_coords: Pos2) -> Option<TileId> {
         let translated_pos = self.current_to_starting_coords(cursor_coords);
-        // log::info!("{:?}", translated_pos);
         self.get_color(translated_pos.x as isize, translated_pos.y as isize)
     }
 

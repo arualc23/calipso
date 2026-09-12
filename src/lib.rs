@@ -21,8 +21,6 @@ pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::s
     let event_loop = winit::event_loop::EventLoop::builder().with_any_thread(false).build().unwrap();
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-    // log::info!("Closing requested: {:?}", CLOSING_REQUESTED);
-
     let mut app = window::ControlFlow::new(initializer, title);
 
     event_loop.run_app(&mut app).unwrap();
@@ -34,8 +32,6 @@ mod tests {
 use crate::{unit_display::UnitDisplay};
 
     use super::*;
-    // use egui::{Color32, Painter, Rect, pos2, vec2};
-    use egui::Painter;
 #[allow(unused_imports)]
     use log::{debug, error, info, warn};
 
@@ -52,7 +48,6 @@ use crate::{unit_display::UnitDisplay};
 
     struct TestState {
         map: map::Map,
-        // unit_texture: Texture,
         units: Vec<unit_display::UnitDisplay>,
     }
 
@@ -71,7 +66,7 @@ use crate::{unit_display::UnitDisplay};
         pub fn new(map: map::Map, logical_map: game::LogicalMap) -> Self {
             let unit_texture = utils::load_texture_from_path("assets/textures/unit.png", &map.ctx(), "unit", utils::TextureOptions::Smooth).unwrap();
 
-            let send = game::interface::init_game_loop(|(input, msg): &(_, ())| info!("Hello world!"), logical_map, map.get_raw_image());
+            let send = game::interface::init_game_loop(|(_input, _msg): &(_, ())| info!("Hello world!"), logical_map, map.get_raw_image());
             let _ = Box::leak(Box::new(send)); //so that main loop doesn't exit immediately
 
             Self { map, units: vec![UnitDisplay::new(0.into(), unit_texture)] }

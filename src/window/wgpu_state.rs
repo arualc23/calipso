@@ -57,20 +57,14 @@ impl WgpuState {
         
         let surface_caps = surface.get_capabilities(&adapter);
 
-        // let surface_format = surface_caps
-        //     .formats
-        //     .iter()
-        //     .copied()
-        //     .find(|f| f.is_srgb())
-        //     .unwrap_or(surface_caps.formats[0]);
         let surface_format = surface_caps.formats[0];
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Fifo, // force vsync, known good
-            alpha_mode: wgpu::CompositeAlphaMode::Opaque, // force opaque
+            present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
