@@ -43,6 +43,6 @@ pub trait GameLoop<Msg> = FnMut(&FullMessage<Msg>) + Send + 'static;
 #[derive(Debug, Default)]
 pub struct InputSnapshot {
     pub pointer_state: egui::PointerState,
-    pub over_tile: Option<crate::game::TileId>,
+    pub over_tile: Option<crate::tile::TileId>,
     pub keys_down: std::collections::HashSet<egui::Key>
 }

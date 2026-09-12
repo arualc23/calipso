@@ -1,11 +1,11 @@
 use egui::{Color32, ColorImage, Pos2, Rect, pos2, vec2};
 
-use crate::{game::{IndexedByTileId, TileIdIter}, map::IdsMap, utils::color_image_to_iter};
+use crate::{tile::{IndexedByTileId, TileIdIter, TileId}, map::IdsMap, utils::color_image_to_iter};
 
 pub type Bboxes = IndexedByTileId<Rect>;
 
 pub fn compute_bbox(map: &IdsMap) -> Bboxes {
-    let mut res = IndexedByTileId::with_repeated(Rect::ZERO, <crate::game::TileId as Into<usize>>::into(map.max()) + 1);
+    let mut res = IndexedByTileId::with_repeated(Rect::ZERO, <TileId as Into<usize>>::into(map.max()) + 1);
     for id in TileIdIter::new(0, map.max() + 1) {
         let color = id.into();
         let center = find_center(color, &*map);

@@ -8,6 +8,7 @@ pub mod map;
 pub mod utils;
 pub mod game;
 pub mod unit_display;
+pub mod tile;
 
 pub mod consts;
 

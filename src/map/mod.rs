@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt::Debug, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
-use crate::{BACKGROUND_LAYER, game::{self, TileId, TileIdIter}, map::creator::Bboxes, unit_display::UnitDisplay, utils::{self, ASSETS, color_image_to_iter}};
+use crate::{BACKGROUND_LAYER, game::{self}, map::creator::Bboxes, unit_display::UnitDisplay, utils::{self, ASSETS, color_image_to_iter}, tile::{TileId, TileIdIter}};
 
 const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
