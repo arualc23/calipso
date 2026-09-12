@@ -1,6 +1,6 @@
-use std::{ops::{Index, IndexMut, Deref, DerefMut}, marker::PhantomData};
+use std::{fmt::Display, marker::PhantomData, ops::{Deref, DerefMut, Index, IndexMut}};
 
-pub trait ID: Clone + Copy + PartialEq + PartialOrd + Eq + Ord + Increment + std::hash::Hash + Into<usize> + From<usize> {}
+pub trait ID: Clone + Copy + PartialEq + PartialOrd + Eq + Ord + Increment + std::hash::Hash + Into<usize> + From<usize> + Display {}
 
 #[macro_export]
 macro_rules! id_derives {
@@ -22,6 +22,12 @@ macro_rules! id_derives {
         impl crate::id::Increment for $item {
             fn increment(&mut self) {
                 self.0 += 1;
+            }
+        }
+
+        impl std::fmt::Display for $item {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
             }
         }
 
@@ -84,8 +90,23 @@ impl<Ind, T> IndexedBy<Ind, T> where Ind: ID {
         }
     }
 
+    pub fn filled_with(length: usize, generator: impl Fn() -> T) -> Self {
+        let mut inner = Vec::with_capacity(length);
+        for _ in 0..length {
+            inner.push(generator());
+        }
+        Self {
+            inner,
+            index: PhantomData
+        }
+    }
+
     pub fn iter_ids(&self) -> IdIterator<Ind> {
         IdIterator { current: 0.into(), last: self.len().into() }
+    }
+
+    pub fn into_inner(self) -> Vec<T> {
+        self.inner
     }
 }
 
@@ -115,5 +136,11 @@ impl<Ind, T> DerefMut for IndexedBy<Ind, T> where Ind: ID {
 
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
+    }
+}
+
+impl<Ind, T> FromIterator<T> for IndexedBy<Ind, T> where Ind: ID {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self { inner: iter.into_iter().collect(), index: PhantomData }
     }
 }

@@ -51,15 +51,20 @@ impl LogicalMap {
 
         Self { map, real_image: (*real_image).clone(), updated: false }
     }
+
+    pub fn tiles_count(&self) -> usize {
+        self.map.inner.len()
+    }
 }
 
 
-pub(crate) fn game_loop<Msg>(
-    mut body: impl GameLoop<Msg>, 
+pub(crate) fn game_loop<Msg, GameState>(
+    mut body: impl GameLoop<Msg, GameState>, 
     mut logical_map: LogicalMap, 
     real_image: Arc<Mutex<ColorImage>>, 
     input_channel: mpsc::Receiver<FullMessage<Msg>>,
-    mut units: unit::UnitStorage,
+    // mut units: unit::UnitStorage,
+    mut state: GameState
 ) 
 where
     Msg: Default
@@ -81,7 +86,7 @@ where
                 input
             }
         };
-        body(&input);
+        body(&input, &mut state);
 
         if logical_map.updated {
             let mut image = real_image.lock().unwrap();

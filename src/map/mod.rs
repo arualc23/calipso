@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt::Debug, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
-use crate::{BACKGROUND_LAYER, game::{self}, map::creator::Bboxes, tile::TileId, unit_display::UnitDisplay, utils::{self, ASSETS, color_image_to_iter}, id::IdIterator};
+use crate::{BACKGROUND_LAYER, game::{self, unit::{AllUnitsDisplay, UnitDisplay}}, id::IdIterator, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
 
 const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
@@ -156,8 +156,10 @@ impl Map {
     }
 
     ///Paints everything and updates with camera movement. Set painter to None to get the default (background layer painter).
-    pub fn run_frame(&mut self, ui: &mut Ui, painter: Option<&Painter>, units: &[UnitDisplay]) {
+    pub fn run_frame(&mut self, ui: &mut Ui, painter: Option<&Painter>, units: &mut AllUnitsDisplay) {
         self.update_map(ui);
+
+        units.update();
 
         let painter = match painter {
             Some(val) => val,
@@ -165,7 +167,7 @@ impl Map {
         };
 
         self.paint_map(painter);
-        self.paint_units(painter, units);
+        self.paint_units(painter, units.as_slice());
     }
 }
 

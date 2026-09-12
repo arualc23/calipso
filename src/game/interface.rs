@@ -1,7 +1,5 @@
 use crate::game::unit;
 
-
-
 pub trait InputSender {
     type Msg;
     fn ctx(&self) -> egui::Context;
@@ -24,24 +22,26 @@ pub trait InputSender {
     }
 }
 
-pub fn init_game_loop<Msg>(
-    game_loop_body: impl GameLoop<Msg>, 
+pub fn init_game_loop<Msg, GameState>(
+    game_loop_body: impl GameLoop<Msg, GameState>, 
     logical_map: crate::game::LogicalMap, 
     real_image: std::sync::Arc<std::sync::Mutex<egui::ColorImage>>,
-    units: unit::UnitStorage,
+    // units: unit::UnitStorage,
+    state: GameState
 ) -> std::sync::mpsc::Sender<(InputSnapshot, Msg)> 
 where
-    Msg: Default + Send + 'static
+    Msg: Default + Send + 'static,
+    GameState: Send + 'static
 {
     let (send, recv) = std::sync::mpsc::channel();
-    let _ = std::thread::spawn(move || crate::game::game_loop(game_loop_body, logical_map, real_image, recv, units, ));
+    let _ = std::thread::spawn(move || crate::game::game_loop(game_loop_body, logical_map, real_image, recv, state, ));
 
     send
 }
 
 
 pub type FullMessage<Msg> = (InputSnapshot, Msg);
-pub trait GameLoop<Msg> = FnMut(&FullMessage<Msg>) + Send + 'static;
+pub trait GameLoop<Msg, GameState> = FnMut(&FullMessage<Msg>, &mut GameState) + Send + 'static;
 
 #[derive(Debug, Default)]
 pub struct InputSnapshot {
