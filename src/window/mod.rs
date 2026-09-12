@@ -73,7 +73,7 @@ impl<F: FnOnce(&render::EguiRenderer) -> Box<dyn State>> ControlFlow<F> {
         self.check_transition_state();
 
 
-        Ok(self.closing_requested)
+        Ok(self.closing_requested || CLOSING_REQUESTED.load(Ordering::Acquire))
 
     }
 

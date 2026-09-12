@@ -146,7 +146,7 @@ impl AllUnitsDisplay {
             Err(e) => {match e {
                 std::sync::mpsc::TryRecvError::Empty => (),
                 std::sync::mpsc::TryRecvError::Disconnected => {
-                    CLOSING_REQUESTED.store(true, std::sync::atomic::Ordering::Release);
+                    crate::global_close();
                     log::error!("Unit update channel input disconnected. Closing requested...")
                 }
             }},

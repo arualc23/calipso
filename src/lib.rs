@@ -16,6 +16,11 @@ pub mod consts;
 pub(crate) use window::CLOSING_REQUESTED;
 pub use consts::*;
 
+#[inline]
+pub(crate) fn global_close() {
+    CLOSING_REQUESTED.store(true, std::sync::atomic::Ordering::Release);
+}
+
 pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::state::State>, title: String) {
     #[cfg(test)]
     let event_loop = winit::event_loop::EventLoop::builder().with_any_thread(true).build().unwrap();

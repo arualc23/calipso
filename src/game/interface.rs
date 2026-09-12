@@ -1,4 +1,4 @@
-use crate::game::unit;
+use crate::game::{LogicalMap, unit};
 
 pub trait InputSender {
     type Msg;
@@ -41,7 +41,7 @@ where
 
 
 pub type FullMessage<Msg> = (InputSnapshot, Msg);
-pub trait GameLoop<Msg, GameState> = FnMut(&FullMessage<Msg>, &mut GameState) + Send + 'static;
+pub trait GameLoop<Msg, GameState> = FnMut(&FullMessage<Msg>, &mut GameState, &mut LogicalMap) + Send + 'static;
 
 #[derive(Debug, Default)]
 pub struct InputSnapshot {

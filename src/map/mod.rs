@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt::Debug, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
-use crate::{BACKGROUND_LAYER, game::{self, unit::{AllUnitsDisplay, UnitDisplay}}, id::IdIterator, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
+use crate::{BACKGROUND_LAYER, game::{self, LogicalMap, unit::{AllUnitsDisplay, UnitDisplay}}, id::{IdIterator, IndexedBy}, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
 
 const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
@@ -30,6 +30,10 @@ impl IdsMap {
 
     pub fn max(&self) -> TileId {
         self.max_id
+    }
+
+    pub fn tiles_count(&self) -> usize {
+        <TileId as Into<usize>>::into(self.max_id) + 1usize
     }
 }
 
@@ -227,3 +231,4 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     Ok((Map::new(raw_image, ids_map, starting_rect, ctx, bboxes), logical_map))
 
 }
+

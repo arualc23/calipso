@@ -1,27 +1,9 @@
 use egui::{Color32, ColorImage};
-use std::ops::{Add, Index, IndexMut};
+use getset::{Getters, CopyGetters};
+use std::ops::{Add, Deref, DerefMut, Index, IndexMut};
 use crate::{id_derives, map::IdsMap, utils, id::{IdIterator, IndexedBy}};
 
 id_derives!{pub TileId}
-
-// #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Ord, Eq, Hash)]
-// pub struct TileId {
-//     inner: u32
-// } 
-
-// impl std::fmt::Display for TileId {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "{}", self.inner)
-//     }
-// }
-
-// impl TileId {
-//     pub fn new(inner: u32) -> Self {
-//         Self {
-//             inner
-//         }
-//     }
-// }
 
 impl From<Color32> for TileId {
     fn from(value: Color32) -> Self {
@@ -44,57 +26,13 @@ impl Into<Color32> for TileId {
     }
 }
 
-// impl Into<usize> for TileId {
-//     fn into(self) -> usize {
-//         self.inner as usize
-//     }
-// }
-
-// impl From<usize> for TileId {
-//     fn from(value: usize) -> Self {
-//         Self { inner: value as u32 }
-//     }
-// }
-
-// impl Add<u32> for TileId {
-//     type Output = TileId;
-//     fn add(self, rhs: u32) -> Self::Output {
-//         Self {inner: self.inner + rhs}
-//     }
-// }
-
-///end excluded, start included
-// pub struct TileIdIter {
-//     current: TileId,
-//     end: Option<TileId>,
-// }
-
-// impl TileIdIter {
-//     pub fn new(start: impl Into<TileId>, end: impl Into<Option<TileId>>) -> Self {
-//         Self {
-//             current: start.into(),
-//             end: end.into()
-//         }
-//     }
-// }
-
-// impl Iterator for TileIdIter {
-//     type Item = TileId;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if let Some(end) = self.end && self.current >= end { return None; }
-//         let res = self.current;
-//         self.current = self.current;
-
-//         Some(res)
-//     }
-// }
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Getters, CopyGetters)]
 pub(crate) struct Tile {
+    #[getset(get_copy = "pub")]
     id: TileId,
     raw_texture: ColorImage,
-
+    #[getset(get_copy = "pub")]
+    movement_cost: f32,
 }
 
 impl Tile {
@@ -114,10 +52,11 @@ impl Tile {
         }
     }
 
-    fn empty(id: TileId, size: [usize; 2]) -> Self {
+    fn empty(id: TileId, size: [usize; 2], movement_cost: f32) -> Self {
         Self {
             id,
-            raw_texture: utils::empty_image(size)
+            raw_texture: utils::empty_image(size),
+            movement_cost
         }
     }
 }
@@ -129,84 +68,41 @@ pub(crate) struct TilesContainer {
 impl TilesContainer {
     pub fn new(length: usize, size: [usize; 2]) -> Self {
         let inner = unsafe {
-            IndexedBy::new(Vec::from_fn(length, |id| Tile::empty(TileId::from(id), size)))
+            IndexedBy::new(Vec::from_fn(length, |id| Tile::empty(TileId::from(id), size, 1.0)))
         };
         Self { inner }
     }
 
-    pub fn iter_ids(&self) -> IdIterator<TileId> {
-        self.inner.iter_ids()
-    }
+    // pub fn iter_ids(&self) -> IdIterator<TileId> {
+    //     self.inner.iter_ids()
+    // }
 
-    pub fn iter(&self) -> core::slice::Iter<'_, Tile> {
-        self.inner.iter()
-    }
+    // pub fn iter(&self) -> core::slice::Iter<'_, Tile> {
+    //     self.inner.iter()
+    // }
 
-    pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, Tile> {
-        self.inner.iter_mut()
+    // pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, Tile> {
+    //     self.inner.iter_mut()
+    // }
+}
+
+impl Deref for TilesContainer {
+    type Target = IndexedBy<TileId, Tile>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
-impl Index<TileId> for TilesContainer {
-    type Output = Tile;
-    fn index(&self, index: TileId) -> &Self::Output {
-        &self.inner[index]
+impl DerefMut for TilesContainer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 
-// pub struct IndexedByTileId<T> {
-//     inner: Vec<T>
-// }
-
-// impl<T> IndexedByTileId<T> {
-//     pub fn new(inner: Vec<T>) -> Self {
-//         Self { inner }
-//     }
-
-//     pub fn with_repeated(value: T, size: usize) -> Self 
-//     where
-//         T :Clone
-//     {
-//         Self { inner: vec![value; size] }
-//     }
-
-//     pub fn iter_ids(&self) -> Box<dyn Iterator<Item = TileId>> {
-//         Box::new(
-//             (0..self.inner.len()).map(|item| TileId::from(item))
-//         )
-//     }
-
-//     pub fn iter(&self) -> core::slice::Iter<'_, T> {
-//         self.inner.iter()
-//     }
-
-//     pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
-//         self.inner.iter_mut()
-//     }
-// }
-
-// impl<T> Index<TileId> for IndexedByTileId<T> {
-//     type Output = T;
+// impl Index<TileId> for TilesContainer {
+//     type Output = Tile;
 //     fn index(&self, index: TileId) -> &Self::Output {
-//         &self.inner[index.0 as usize]
-//     }
-// }
-
-// impl<T> IndexMut<TileId> for IndexedByTileId<T> {
-//     fn index_mut(&mut self, index: TileId) -> &mut Self::Output {
-//         &mut self.inner[index.0 as usize]
-//     }
-// }
-
-// impl<T> std::ops::Deref for IndexedByTileId<T> {
-//     type Target = Vec<T>;
-//     fn deref(&self) -> &Self::Target {
-//         &self.inner
-//     }
-// }
-
-// impl<T> std::ops::DerefMut for IndexedByTileId<T> {
-//     fn deref_mut(&mut self) -> &mut Self::Target {
-//         &mut self.inner
+//         &self.inner[index]
 //     }
 // }

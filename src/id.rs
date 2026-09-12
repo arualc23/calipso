@@ -1,4 +1,4 @@
-use std::{fmt::Display, marker::PhantomData, ops::{Deref, DerefMut, Index, IndexMut}};
+use std::{fmt::{Debug, Display}, marker::PhantomData, ops::{Deref, DerefMut, Index, IndexMut}};
 
 pub trait ID: Clone + Copy + PartialEq + PartialOrd + Eq + Ord + Increment + std::hash::Hash + Into<usize> + From<usize> + Display {}
 
@@ -108,6 +108,21 @@ impl<Ind, T> IndexedBy<Ind, T> where Ind: ID {
     pub fn into_inner(self) -> Vec<T> {
         self.inner
     }
+
+    pub fn get(&self, index: Ind) -> Option<&T> {
+        self.inner.get(index.into())
+    }
+
+    pub fn into_iter_enumerated(self) -> std::iter::Zip<IdIterator<Ind>, std::vec::IntoIter<T>> {
+        let upper = self.len().into();
+        IdIterator::<Ind>::new(0.into(), upper).zip(self.into_iter())
+    }
+}
+
+impl<Ind, T> Debug for IndexedBy<Ind, T> where Ind: ID, T: Debug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
+    }
 }
 
 impl<Ind, T> Index<Ind> for IndexedBy<Ind, T> where Ind: ID {
@@ -142,5 +157,14 @@ impl<Ind, T> DerefMut for IndexedBy<Ind, T> where Ind: ID {
 impl<Ind, T> FromIterator<T> for IndexedBy<Ind, T> where Ind: ID {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Self { inner: iter.into_iter().collect(), index: PhantomData }
+    }
+}
+
+impl<Ind, T> IntoIterator for IndexedBy<Ind, T> where Ind: ID {
+    type IntoIter = std::vec::IntoIter<T>;
+    type Item = T;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
     }
 }
