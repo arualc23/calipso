@@ -1,4 +1,4 @@
-use std::{ops::{Add, AddAssign, Deref, DerefMut, Index, IndexMut}, path::Path, sync::LazyLock, collections::BinaryHeap, cmp::Reverse};
+use std::{cmp::Reverse, collections::BinaryHeap, ops::{Add, }, path::Path, sync::LazyLock};
 
 use egui::{ColorImage, Context, TextureHandle};
 
@@ -6,6 +6,9 @@ use crate::{game::{self, LogicalMap}, id::IndexedBy, tile::TileId};
 
 pub static ASSETS: LazyLock<&Path> = LazyLock::new(|| Path::new("assets"));
 pub const UV: egui::Rect = egui::Rect {min: egui::Pos2 {x: 0.0, y: 0.0}, max: egui::Pos2 {x: 1.0, y: 1.0}};
+
+pub mod dbuffer;
+pub use dbuffer::{DBufferReader, DBufferWriter};
 
 #[macro_export]
 macro_rules! path {
@@ -254,7 +257,7 @@ impl Ord for Element {
 }
 
 /// # Returns
-/// The map from tile ids to the distance from origin, and the previous tile on the path.
+/// A map from tile ids to the distance from origin, and the previous tile on the path.
 pub(crate) fn dijkstra(lmap: &LogicalMap, tile: TileId) -> IndexedBy<TileId, (f32, TileId)> {
     let mut pool: BinaryHeap<Reverse<Element>> = BinaryHeap::new();
     pool.push(Reverse(Element(0.0.into(), tile)));
@@ -278,4 +281,24 @@ pub(crate) fn dijkstra(lmap: &LogicalMap, tile: TileId) -> IndexedBy<TileId, (f3
     }
 
     res
+}
+
+pub(crate) fn try_result_until_success<T, E>(f: impl Fn() -> Result<T, E>) -> T {
+    let mut res = f();
+    while let Err(_) = res {
+        res = f();
+        std::hint::spin_loop();
+    }
+
+    unsafe {res.unwrap_unchecked()}
+}
+
+pub(crate) fn try_option_until_success<T>(f: impl Fn() -> Option<T>) -> T {
+    let mut res = f();
+    while let None = res {
+        res = f();
+        std::hint::spin_loop();
+    }
+
+    res.unwrap()
 }

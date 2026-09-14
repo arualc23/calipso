@@ -1,5 +1,7 @@
 #![feature(vec_from_fn)]
 #![feature(trait_alias)]
+#![warn(rustdoc::broken_intra_doc_links)]
+
 
 use egui_winit::winit::{self, platform::wayland::EventLoopBuilderExtWayland};
 
@@ -33,54 +35,99 @@ pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::s
     event_loop.run_app(&mut app).unwrap();
 }
 
-// #[cfg(test)]
-// mod tests {
+#[cfg(test)]
+mod tests {
 
 // use crate::{unit_display::UnitDisplay};
 
-//     use super::*;
-// #[allow(unused_imports)]
-//     use log::{debug, error, info, warn};
+    // use core::panicking::panic;
 
-//     #[test]
-//     pub(crate) fn test1() {
-//         env_logger::init();
-//         info!("Staritng test");
-//         init(|renderer| {
-//             let (map, lmap) = map::load_map("test1", renderer.ctx().clone()).unwrap();
-//             Box::new(TestState::new(map, lmap))
-//         }, "Test".to_string());
-//         info!("After init");
-//     }
+use std::net::{TcpListener, TcpStream};
 
-//     struct TestState {
-//         map: map::Map,
-//         units: Vec<unit_display::UnitDisplay>,
-//     }
+use super::*;
+#[allow(unused_imports)]
+    use log::{debug, error, info, warn};
 
-//     impl window::state::State for TestState {
-//         fn run_frame(&mut self, ui: &mut egui_winit::egui::Ui) {
+    // #[test]
+    // pub(crate) fn test1() {
+    //     env_logger::init();
+    //     info!("Staritng test");
+    //     init(|renderer| {
+    //         let (map, lmap) = map::load_map("test1", renderer.ctx().clone()).unwrap();
+    //         Box::new(TestState::new(map, lmap))
+    //     }, "Test".to_string());
+    //     info!("After init");
+    // }
 
-//             let painter = ui.layer_painter(*BACKGROUND_LAYER);
-//             self.map.run_frame(ui, Some(&painter), &self.units);
-//         }
-//         fn transition(&mut self) -> Option<Box<dyn window::state::State>> {
-//             None
-//         }
-//     }
+    // struct TestState {
+    //     map: map::Map,
+    //     units: Vec<unit_display::UnitDisplay>,
+    // }
 
-//     impl TestState {
-//         pub fn new(map: map::Map, logical_map: game::LogicalMap) -> Self {
-//             let unit_texture = utils::load_texture_from_path("assets/textures/unit.png", &map.ctx(), "unit", utils::TextureOptions::Smooth).unwrap();
+    // impl window::state::State for TestState {
+    //     fn run_frame(&mut self, ui: &mut egui_winit::egui::Ui) {
 
-//             let send = game::interface::init_game_loop(|(_input, _msg): &(_, ())| info!("Hello world!"), logical_map, map.get_raw_image());
-//             let _ = Box::leak(Box::new(send)); //so that main loop doesn't exit immediately
+    //         let painter = ui.layer_painter(*BACKGROUND_LAYER);
+    //         self.map.run_frame(ui, Some(&painter), &self.units);
+    //     }
+    //     fn transition(&mut self) -> Option<Box<dyn window::state::State>> {
+    //         None
+    //     }
+    // }
 
-//             Self { map, units: vec![UnitDisplay::new(0.into(), unit_texture)] }
-//         }
+    // impl TestState {
+    //     pub fn new(map: map::Map, logical_map: game::LogicalMap) -> Self {
+    //         let unit_texture = utils::load_texture_from_path("assets/textures/unit.png", &map.ctx(), "unit", utils::TextureOptions::Smooth).unwrap();
+
+    //         let send = game::interface::init_game_loop(|(_input, _msg): &(_, ())| info!("Hello world!"), logical_map, map.get_raw_image());
+    //         let _ = Box::leak(Box::new(send)); //so that main loop doesn't exit immediately
+
+    //         Self { map, units: vec![UnitDisplay::new(0.into(), unit_texture)] }
+    //     }
         
-//     }
+    // }
+
+    // #[test]
+    // fn test2() {
+    //     // panic!();
+    //     env_logger::init();
+    //     log::info!("hello");
+    //     println!("hello");
+    //     game::server::init_server_loop(|a| {}, (), game::server::SERVER_SOCKET_ADDRESS);
+    // }
+
+    // #[test]
+    // fn test3() {
+    //     use std::io::{Read, Write};
+        
+    //     let mut listener = TcpListener::bind("127.0.0.1:7891").unwrap();
+    //     let mut stream_in = TcpStream::connect("127.0.0.1:7891").unwrap();
+    //     let (mut stream_out, _) = listener.accept().unwrap();
+    //     let mut buf = [0u8; 16];
+    //     let length = bincode_next::serde::encode_into_slice((), &mut buf, game::server::CONFIG).unwrap();
+    //     stream_in.write_all(&(length as u32).to_be_bytes());
+    //     stream_in.write_all( &buf[0..length]);
 
 
+    //     let mut length = [0u8; 4];
+    //     stream_out.read_exact(&mut length).unwrap();
+    //     let length = u32::from_be_bytes(length) as usize;
+    //     let mut buf = vec![0u8; length];
+    //     stream_out.read_exact(&mut buf).unwrap();
+    //     log::debug!("buffer after read: {:?}", buf);
+    //     let _ = Ok(bincode_next::serde::decode_from_slice(&buf, game::server::CONFIG).unwrap().0);
+    // }
 
-// }
+    #[test]
+    fn test4() {
+        env_logger::init();
+        let (mut writer, mut reader) = utils::dbuffer::new(0u32);
+
+        let _ = std::thread::spawn(move || {let mut i = 1; loop {writer.write(i); writer.swap(); i+= 1; std::thread::sleep(std::time::Duration::from_millis(100));}});
+        loop {
+            log::info!("{}", reader.read());
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
+}

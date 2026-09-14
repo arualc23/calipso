@@ -1,12 +1,14 @@
-use std::{collections::HashSet, marker::PhantomData, ops::{Index, IndexMut}, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, TryRecvError}}};
+use std::{collections::HashSet, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, TryRecvError}}};
 
 use egui::{Color32, ColorImage};
+use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{consts, id::{Increment, IndexedBy}, map::IdsMap, tile, utils};
+use crate::{consts, id::{IndexedBy}, map::IdsMap, tile, utils};
 
 pub mod interface;
 pub mod unit;
 pub mod player;
+pub mod server;
 
 use interface::{FullMessage, GameLoop, InputSnapshot};
 
@@ -123,19 +125,31 @@ impl Iterator for Path {
 }
 
 
-pub(crate) fn game_loop<Msg, GameState>(
-    mut body: impl GameLoop<Msg, GameState>, 
+pub(crate) fn game_loop<InputMsg, OutputMsg, GameState, ToServer, FromServer>(
+    mut body: impl GameLoop<InputMsg, OutputMsg, GameState, ToServer, FromServer>, 
     mut logical_map: LogicalMap, 
     real_image: Arc<Mutex<ColorImage>>, 
-    input_channel: mpsc::Receiver<FullMessage<Msg>>,
+    input_channel: mpsc::Receiver<FullMessage<InputMsg>>,
     // mut units: unit::UnitStorage,
-    mut state: GameState
+    mut state: GameState,
+    server_socket: std::net::SocketAddr,
+    // dbg_send: Sender<Box<dyn Any + Send>>,
+    mut updates_send: utils::DBufferWriter<OutputMsg>
 ) 
 where
-    Msg: Default
+    InputMsg: Default,
+    OutputMsg: Clone,
+    FromServer: DeserializeOwned,
+    ToServer: Serialize,
 {
-    let mut input = <(InputSnapshot, Msg)>::default();
+    log::info!("Client game loop called");
+    let mut input = <(InputSnapshot, InputMsg)>::default();
+    //Server always needs to initialize first
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+    log::info!("Connecting to server at {server_socket:?}...");
+    let mut stream = std::net::TcpStream::connect(server_socket).unwrap();
     loop {
+        let server_input: FromServer = server::read_from_stream(&mut stream).unwrap();
         if crate::CLOSING_REQUESTED.load(Ordering::Acquire) {
             log::info!("Close requested! Exiting...");
             break;
@@ -151,13 +165,22 @@ where
                 input
             }
         };
-        body(&input, &mut state, &mut logical_map);
+        let (to_gui, to_server) = body(server_input, &input, &mut state, &mut logical_map);
+
+        // dbg_send.send(Box::new(server_input));s
 
         if logical_map.updated {
             let mut image = real_image.lock().unwrap();
             *image = logical_map.real_image.clone();
             logical_map.updated = false;
         }
+
+        updates_send.write(to_gui);
+        updates_send.swap();
+
+        // let data = ();
+
+        server::write_to_stream(&mut stream, to_server).unwrap();
     }
 }
 
