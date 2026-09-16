@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fmt::Debug, fs, num::ParseFloatError, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
-use serde::Deserialize;
-use crate::{BACKGROUND_LAYER, game::{self, LogicalMap, unit::{AllUnitsDisplay, UnitDisplay}}, id::{IdIterator, IndexedBy}, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
+use serde::{Deserialize, de::DeserializeOwned};
+use crate::{BACKGROUND_LAYER, game::{self, LogicalMap, player, unit::{AllUnitsDisplay, UnitDisplay}}, id::{IdIterator, IndexedBy}, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
 
 const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
@@ -202,13 +202,19 @@ impl LoadMapError {
 }
 
 pub struct MapProperties {
-    pub movement_costs: Vec<f32>,
+    pub movement_costs: IndexedBy<TileId, f32>,
+    pub controllers: IndexedBy<TileId, player::PlayerId>,
 }
 
 #[derive(Deserialize)]
 struct MapPropertiesRaw {
     movement_costs: Vec<String>,
+    controllers: Vec<usize>,
 }
+
+// pub trait FromJSON {
+//     fn from_json(file: &mut fs::File) -> Self;
+// }
 
 impl TryFrom<MapPropertiesRaw> for MapProperties {
     type Error = LoadMapError;
@@ -216,13 +222,33 @@ impl TryFrom<MapPropertiesRaw> for MapProperties {
         Ok(Self {
             movement_costs: value.movement_costs.into_iter()
                 .map(|val| val.parse())
-                .collect::<Result<Vec<_>, std::num::ParseFloatError>>()
-                .map_err(|e| LoadMapError::from_debug(e))?
+                .collect::<Result<IndexedBy<TileId, f32>, std::num::ParseFloatError>>()
+                .map_err(|e| LoadMapError::from_debug(e))?,
+            controllers: value.controllers.into_iter()
+                .map(|val| player::PlayerId::from(val))
+                .collect()
         })
     }
 }
 
 pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::LogicalMap), LoadMapError> {
+    static DEBUG_PLAYER_COLOR_TABLE: LazyLock<IndexedBy<player::PlayerId, Color32>> = LazyLock::new(|| {
+        unsafe { IndexedBy::new(vec![
+            Color32::from_rgba_unmultiplied(0, 0, 0, 0), 
+            Color32::from_rgba_unmultiplied(0x2f, 0x4f, 0x4f, 100), 
+            Color32::from_rgba_unmultiplied(0x22, 0x8b, 0x22, 100),
+            Color32::from_rgba_unmultiplied(0x7f, 0, 0, 100),
+            Color32::from_rgba_unmultiplied(0, 0, 0x80, 100),
+            Color32::from_rgba_unmultiplied(0xff, 0x8c, 0, 100),
+            Color32::from_rgba_unmultiplied(255, 255, 0, 100),
+            Color32::from_rgba_unmultiplied(0, 255, 0, 100),
+            Color32::from_rgba_unmultiplied(0, 255, 255, 100),
+            Color32::from_rgba_unmultiplied(255, 0, 255, 100),
+            Color32::from_rgba_unmultiplied(0x1e, 0x90, 0xff, 100),
+            Color32::from_rgba_unmultiplied(0xee, 0xe8, 0xaa, 100),
+            Color32::from_rgba_unmultiplied(0xff, 0x69, 0xb4, 100),
+        ]) }
+    });
     const IDS_MAP_FILE_NAME: &str = "raw.png";
     const VISUAL_FILE_NAME: &str = "vis.png";
     const PROPS_FILE_NAME: &str = "props.json";
@@ -249,13 +275,17 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     let props = MapProperties::try_from(json)?; 
     assert_eq!(props.movement_costs.len(), length);
 
-    //Safety: We checked that lengths match.
-    let movement_costs = unsafe { IndexedBy::new(props.movement_costs) };
+    let MapProperties { movement_costs, controllers }= props;
+
+
+    // let player_color_table = unsafe { IndexedBy::new(vec![Color32::from_rgba_unmultiplied(255, 0, 0, 128), ]) };
 
     let arc_ids_map = Arc::new(ids_map);
     let arc_real_map_image = Arc::new(real_map_image);
-    let logical_map = game::LogicalMap::new(arc_real_map_image, arc_ids_map.clone(), &movement_costs);
+    let mut logical_map = game::LogicalMap::new(arc_real_map_image, arc_ids_map.clone(), &movement_costs, &controllers, DEBUG_PLAYER_COLOR_TABLE.clone());
     let ids_map = Arc::into_inner(arc_ids_map).expect("All threads must be joined by now");
+
+    logical_map.update_all_tile_textures();
 
     let raw_image = Arc::new(Mutex::new(logical_map.get_real_image().clone()));
 

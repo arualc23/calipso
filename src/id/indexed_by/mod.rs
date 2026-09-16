@@ -18,6 +18,8 @@ impl<Ind, T> IndexedBy<Ind, T> where Ind: ID {
         }
     }
 
+    // pub const unsafe fn new<N: const usize>(inner: [T; N]) -> 
+
     pub fn empty() -> Self {
         Self {
             inner: Vec::new(),

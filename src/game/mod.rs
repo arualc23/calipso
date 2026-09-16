@@ -1,9 +1,9 @@
-use std::{collections::HashSet, fmt::Debug, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, TryRecvError}}};
+use std::{collections::HashSet, fmt::Debug, sync::{Arc, Mutex, atomic::Ordering}};
 
 use egui::{Color32, ColorImage};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{consts, game::interface::InputReader, id::IndexedBy, map::IdsMap, tile, utils::{self, DBufferReader}};
+use crate::{consts, game::interface::InputReader, id::{IndexedBy}, map::IdsMap, tile, utils::{self, DBufferReader}};
 
 pub mod interface;
 pub mod unit;
@@ -45,25 +45,45 @@ fn get_neighbours(ids_map: &IdsMap) -> IndexedBy<tile::TileId, Vec<tile::TileId>
 }
 
 pub struct LogicalMap {
-    map: tile::TilesContainer,
+    map: IndexedBy<tile::TileId, tile::Tile>,
     real_image: ColorImage,
     updated: bool,
-    neighbours: IndexedBy<tile::TileId, Vec<tile::TileId>>
+    neighbours: IndexedBy<tile::TileId, Vec<tile::TileId>>,
+    player_color_table: IndexedBy<player::PlayerId, Color32>
 }
 
 impl LogicalMap {
+    /// Remember to manually update the buffered texture with [Self::update_tile_texture] or [Self::update_all_tile_textures] if it was changed.
     pub fn get_real_image(&self) -> &ColorImage {
         &self.real_image
     }
-    fn update_tile_texture(&mut self, tile_id: tile::TileId) {
-        self.map[tile_id].paste_onto_canvas(&mut self.real_image);
+
+    pub fn update_tile_texture(&mut self, tile_id: tile::TileId) {
+        self.map[tile_id].paste_onto_canvas(&mut self.real_image, |id| self.player_color_table[id]);
+    }
+    pub fn update_all_tile_textures(&mut self) {
+        for tile in self.map.iter() {
+            tile.paste_onto_canvas(&mut self.real_image, |id| self.player_color_table[id]);
+        }
     }
 
-    pub(crate) fn new(real_image: Arc<ColorImage>, ids_map: Arc<IdsMap>, movement_costs: &IndexedBy<tile::TileId, f32>) -> Self {
+    pub(crate) fn new(
+        real_image: Arc<ColorImage>, 
+        ids_map: Arc<IdsMap>, 
+        movement_costs: &IndexedBy<tile::TileId, f32>, 
+        controllers: &IndexedBy<tile::TileId, player::PlayerId>,
+        player_color_table: IndexedBy<player::PlayerId, Color32>
+    ) -> Self {
 
         let length = <tile::TileId as Into<usize>>::into(ids_map.max()) + 1usize;
-        let mut map = tile::TilesContainer::new(length, real_image.size, movement_costs);
-        let chunks = map.inner.chunks_mut(length.div_ceil(consts::PROCESS_COUNT));
+        // let mut map = tile::TilesContainer::new(length, real_image.size, movement_costs);
+        let mut map = unsafe { IndexedBy::new(Vec::from_fn(length, |id| {
+            let tile_id = tile::TileId::from(id);
+            tile::Tile::empty(tile_id, real_image.size, movement_costs[tile_id], controllers[tile_id])
+        })
+            
+        )};
+        let chunks = map.chunks_mut(length.div_ceil(consts::PROCESS_COUNT));
 
         std::thread::scope(|s| {
             let mut processes = [const {None}; consts::PROCESS_COUNT];
@@ -82,11 +102,11 @@ impl LogicalMap {
 
         let neighbours = get_neighbours(&ids_map);
 
-        Self { map, real_image: (*real_image).clone(), updated: false, neighbours }
+        Self { map, real_image: (*real_image).clone(), updated: false, neighbours, player_color_table }
     }
 
     pub fn tiles_count(&self) -> usize {
-        self.map.inner.len()
+        self.map.len()
     }
 
     pub fn neighbours(&self, tile: tile::TileId) -> &[tile::TileId] {
