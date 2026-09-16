@@ -27,7 +27,7 @@ impl Into<Color32> for TileId {
 }
 
 #[derive(Debug, Clone, Getters, CopyGetters)]
-pub(crate) struct Tile {
+pub struct Tile {
     #[getset(get_copy = "pub")]
     id: TileId,
     raw_texture: ColorImage,
@@ -66,9 +66,16 @@ pub(crate) struct TilesContainer {
 }
 
 impl TilesContainer {
-    pub fn new(length: usize, size: [usize; 2]) -> Self {
+    // pub fn new(length: usize, size: [usize; 2],) -> Self {
+    //     let inner = unsafe {
+    //         IndexedBy::new(Vec::from_fn(length, |id| Tile::empty(TileId::from(id), size, 1.0)))
+    //     };
+    //     Self { inner }
+    // }
+
+    pub fn new(length: usize, size: [usize; 2], movement_costs: &IndexedBy<TileId, f32>) -> Self {
         let inner = unsafe {
-            IndexedBy::new(Vec::from_fn(length, |id| Tile::empty(TileId::from(id), size, 1.0)))
+            IndexedBy::new(Vec::from_fn(length, |id| Tile::empty(TileId::from(id), size, movement_costs[id.into()])))
         };
         Self { inner }
     }

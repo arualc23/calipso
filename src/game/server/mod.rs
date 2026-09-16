@@ -2,7 +2,7 @@ use std::{io::{Read, Write}, net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, Tc
 
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{CLOSING_REQUESTED};
+use crate::{CLOSING_REQUESTED, id, tile};
 
 pub(super) const SERVER_SOCKET_ADDRESS: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 7880);
 pub(crate) static CONFIG: bincode_next::config::Configuration<
@@ -16,23 +16,24 @@ pub(crate) static CONFIG: bincode_next::config::Configuration<
     .with_fixed_int_encoding()
     .with_no_bit_packing();
 
-pub trait ServerLoopBody<State, FromServer, ToServer> = FnMut(&mut State, ToServer) -> FromServer + Send + 'static;
+pub trait ServerLoopBody<State, FromServer, ToServer> = FnMut(&mut State, ToServer, &id::IndexedBy<tile::TileId, tile::Tile>) -> FromServer + Send + 'static;
 
 pub(super) fn init_server_loop<State, FromServer, ToServer>(
     body: impl ServerLoopBody<State, FromServer, ToServer>, 
     state: State,
-    socket: std::net::SocketAddr
+    socket: std::net::SocketAddr,
+    tiles: id::IndexedBy<tile::TileId, tile::Tile>
 ) where 
     State: Send + 'static,
     FromServer: Serialize,
     ToServer: DeserializeOwned + Default,
 {
     let _ = std::thread::spawn(move || {
-        server_loop::<State, FromServer, ToServer>(body, state, socket);
+        server_loop::<State, FromServer, ToServer>(body, state, socket, tiles);
     });
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Tick(u8);
 
 impl Tick {
@@ -53,31 +54,24 @@ fn server_loop<State, FromServer: Serialize, ToServer: DeserializeOwned + Defaul
     mut body: impl ServerLoopBody<State, FromServer, ToServer>, 
     mut state: State,
     socket: std::net::SocketAddr,
+    tiles: id::IndexedBy<tile::TileId, tile::Tile>
 ) {
     log::info!("statr");
-    // std::thread::sleep(std::time::Duration::from_millis(500));
-    // let mut buf = [0u8; 2048];
 
-    // let mut stream = utils::try_result_until_success(|| TcpStream::connect(SERVER_SOCKET_ADDRESS));
     let listener = TcpListener::bind(socket).unwrap();
-    // let mut stream = TcpStream::connect(socket).unwrap();
-    // thread::sleep(Duration::from_millis(200));
+
     log::info!("Blocking until Tcp connection...");
     let (mut stream, _) = listener.accept().unwrap();
     let mut to_server = ToServer::default();
     log::info!("Connected!");
-    // let mut current = Tick(0);
+
     loop {
         if CLOSING_REQUESTED.load(std::sync::atomic::Ordering::Acquire) { break; }
-        // write_to_stream(&mut stream, current.clone()).unwrap();
-        // log::info!("{input:?}");
-        let from_server = body(&mut state, to_server);
+
+        
+
+        let from_server = body(&mut state, to_server, &tiles);
         write_to_stream(&mut stream, from_server).unwrap();
-
-        // current.advance();
-
-        // break;
-        // sleep(Duration::from_millis(1000));
 
         to_server = read_from_stream(&mut stream).unwrap();
 

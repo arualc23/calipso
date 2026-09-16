@@ -118,16 +118,16 @@ use super::*;
     //     let _ = Ok(bincode_next::serde::decode_from_slice(&buf, game::server::CONFIG).unwrap().0);
     // }
 
-    #[test]
-    fn test4() {
-        env_logger::init();
-        let (mut writer, mut reader) = utils::dbuffer::new(0u32);
+    // #[test]
+    // fn test4() {
+    //     env_logger::init();
+    //     let (mut writer, mut reader) = utils::dbuffer::new(0u32);
 
-        let _ = std::thread::spawn(move || {let mut i = 1; loop {writer.write(i); writer.swap(); i+= 1; std::thread::sleep(std::time::Duration::from_millis(100));}});
-        loop {
-            log::info!("{}", reader.read());
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-    }
+    //     let _ = std::thread::spawn(move || {let mut i = 1; loop {writer.write(i); writer.swap(); i+= 1; std::thread::sleep(std::time::Duration::from_millis(100));}});
+    //     loop {
+    //         log::info!("{}", reader.read());
+    //         std::thread::sleep(std::time::Duration::from_millis(100));
+    //     }
+    // }
 
 }

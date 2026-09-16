@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, sync::{Arc, atomic::{AtomicU8, Ordering}}};
+use std::{cell::UnsafeCell, fmt::Debug, sync::{Arc, atomic::{AtomicU8, Ordering}}};
 
 /// Double buffer implementation that can be shared across two threads. 
 
@@ -58,7 +58,7 @@ fn block_on_flag(flag: &AtomicU8, current: Flag, new: Flag) {
     }
 }
 
-///Writer of the double buffer. Use [Self::write] to write to writing buffer, and [Self::swap] to swap the buffers.
+///Writer of the double buffer. [Self::write] writes to the buffer, then blocks and swaps safely.
 pub struct DBufferWriter<T: Clone> {
     inner: Arc<DoubleBuffer<T>>
 }
@@ -82,20 +82,24 @@ impl<T: Clone> DBufferReader<T> {
     }
 }
 
-impl<T: Clone> DBufferWriter<T> {
+impl<T: Clone + Debug> DBufferWriter<T> {
     pub fn write(&mut self, data: T) {
         //Safety: there is no other access to the writing buffer.
         unsafe {
             self.inner.write(data);
         }
+
+        self.swap();
         
     }
 
-    pub fn swap(&mut self) {
+    fn swap(&mut self) {
         block_on_flag(&self.inner.flag, Flag::Free, Flag::Swapping);
 
+        
         //Safety: we checked the reading flag, and set the swapping flag.
         unsafe {
+            // log::info!("Obtained lock, swapping. Data in write buffer: {:?}", *self.inner.write.get());
             self.inner.swap();
         }
 

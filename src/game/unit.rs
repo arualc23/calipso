@@ -1,18 +1,24 @@
-use std::{ops::Deref, sync::mpsc::{Receiver, Sender}};
+use std::{ops::{Deref, DerefMut}, sync::mpsc::{Receiver, Sender}};
 
 use egui::TextureHandle;
 
-use crate::{CLOSING_REQUESTED, game::player, id::{IdIterator, IndexedBy}, id_derives, tile::{self, TileId}, utils};
+use crate::{CLOSING_REQUESTED, game::player, id::{self, IdIterator, IndexedBy}, id_derives, tile::{self, TileId}, utils};
 
+use getset::{CloneGetters, CopyGetters, Getters, Setters};
 
 id_derives!{pub UnitId}
 
-
+#[derive(Getters, CopyGetters, CloneGetters, Setters)]
 pub struct Unit {
+    #[getset(get_copy = "pub")]
     id: UnitId,
+    #[getset(get_copy = "pub", set = "pub")]
     tile: tile::TileId,
+    #[getset(get_copy = "pub")]
     controller: player::PlayerId,
+    #[getset(skip)]
     exists: bool,
+    #[getset(get_clone = "pub")]
     texture: TextureHandle,
 }
 
@@ -99,8 +105,15 @@ impl UnitStorage {
         res
     }
 
-    pub fn update(&self) -> Result<(), std::sync::mpsc::SendError<CurrentPositions>> {
+    pub fn send_updates(&self) -> Result<(), std::sync::mpsc::SendError<CurrentPositions>> {
         self.send.send(self.current_positions())
+    }
+
+    /// # Returns
+    /// [None] is returned when the unit_id was invalid.
+    pub fn update_unit_position(&mut self, unit_id: UnitId, tile_id: TileId) -> Option<()> {
+        self.inner.get_mut(unit_id)?.tile = tile_id;
+        Some(())
     }
 }
 
@@ -109,6 +122,12 @@ impl Deref for UnitStorage {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl DerefMut for UnitStorage {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 

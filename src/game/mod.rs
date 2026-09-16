@@ -1,16 +1,16 @@
-use std::{collections::HashSet, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, TryRecvError}}};
+use std::{collections::HashSet, fmt::Debug, sync::{Arc, Mutex, atomic::Ordering, mpsc::{self, TryRecvError}}};
 
 use egui::{Color32, ColorImage};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{consts, id::{IndexedBy}, map::IdsMap, tile, utils};
+use crate::{consts, game::interface::InputReader, id::IndexedBy, map::IdsMap, tile, utils::{self, DBufferReader}};
 
 pub mod interface;
 pub mod unit;
 pub mod player;
 pub mod server;
 
-use interface::{FullMessage, GameLoop, InputSnapshot};
+use interface::{InputSnapshot};
 
 pub const NULL: Color32 = Color32::from_rgba_premultiplied(0, 0 ,0, 0);
 
@@ -59,10 +59,10 @@ impl LogicalMap {
         self.map[tile_id].paste_onto_canvas(&mut self.real_image);
     }
 
-    pub(crate) fn new(real_image: Arc<ColorImage>, ids_map: Arc<IdsMap>) -> Self {
+    pub(crate) fn new(real_image: Arc<ColorImage>, ids_map: Arc<IdsMap>, movement_costs: &IndexedBy<tile::TileId, f32>) -> Self {
 
         let length = <tile::TileId as Into<usize>>::into(ids_map.max()) + 1usize;
-        let mut map = tile::TilesContainer::new(length, real_image.size);
+        let mut map = tile::TilesContainer::new(length, real_image.size, movement_costs);
         let chunks = map.inner.chunks_mut(length.div_ceil(consts::PROCESS_COUNT));
 
         std::thread::scope(|s| {
@@ -102,6 +102,7 @@ impl LogicalMap {
         let raw = utils::dijkstra(&self, tile_from);
         // log::info!("raw obtained: {:#?}", &raw);
         let mut path = Vec::with_capacity(self.tiles_count());
+        path.push(tile_to);
         let mut cursor = raw[tile_to].1;
         while cursor != tile_from {
             path.push(cursor);
@@ -109,9 +110,12 @@ impl LogicalMap {
         }
         Path { inner: path }
     }
+
+    
 }
 
 ///Stores a path between two tiles. Accessed with its [core::iter::Iterator] implementation. Does not include the starting tile.
+#[derive(Deserialize, Serialize,Debug)]
 pub struct Path {
     inner: Vec<tile::TileId>,
 }
@@ -124,30 +128,37 @@ impl Iterator for Path {
     }
 }
 
+impl Path {
+    pub fn finished(&self) -> bool {
+        self.inner.is_empty()
+    }
+}
 
-pub(crate) fn game_loop<InputMsg, OutputMsg, GameState, ToServer, FromServer>(
-    mut body: impl GameLoop<InputMsg, OutputMsg, GameState, ToServer, FromServer>, 
+
+pub(crate) fn game_loop<FromGUI, ToGUI, GameState, ToServer, FromServer>(
+    mut body: impl FnMut(FromServer, &InputReader, FromGUI, &mut GameState, &mut LogicalMap) -> (ToGUI, ToServer) + Send + 'static, 
     mut logical_map: LogicalMap, 
     real_image: Arc<Mutex<ColorImage>>, 
-    input_channel: mpsc::Receiver<FullMessage<InputMsg>>,
+    mut from_gui: DBufferReader<(InputSnapshot, FromGUI)>,
     // mut units: unit::UnitStorage,
     mut state: GameState,
     server_socket: std::net::SocketAddr,
     // dbg_send: Sender<Box<dyn Any + Send>>,
-    mut updates_send: utils::DBufferWriter<OutputMsg>
+    mut updates_send: utils::DBufferWriter<ToGUI>
 ) 
 where
-    InputMsg: Default,
-    OutputMsg: Clone,
+    FromGUI: Default + Clone,
+    ToGUI: Clone + Debug,
     FromServer: DeserializeOwned,
     ToServer: Serialize,
 {
     log::info!("Client game loop called");
-    let mut input = <(InputSnapshot, InputMsg)>::default();
+    // let mut input = <(InputSnapshot, FromGUI)>::default();
     //Server always needs to initialize first
     std::thread::sleep(std::time::Duration::from_millis(1000));
     log::info!("Connecting to server at {server_socket:?}...");
     let mut stream = std::net::TcpStream::connect(server_socket).unwrap();
+    let mut input_reader = InputReader::default();
     loop {
         let server_input: FromServer = server::read_from_stream(&mut stream).unwrap();
         if crate::CLOSING_REQUESTED.load(Ordering::Acquire) {
@@ -155,19 +166,11 @@ where
             break;
         }
 
-        input = match input_channel.try_recv() {
-            Ok(val) => val,
-            Err(e) => {
-                if let TryRecvError::Disconnected = e {
-                    crate::global_close();
-                    log::error!("Main thread disconnected! This is the final iteration."); 
-                }
-                input
-            }
-        };
-        let (to_gui, to_server) = body(server_input, &input, &mut state, &mut logical_map);
+        let (input_snapshot, from_gui) = from_gui.read();
+        // log::info!("Before upadate snapgh: {}", input_snapshot.pointer_state.any_down());
+        input_reader.update_snapshot(input_snapshot);
 
-        // dbg_send.send(Box::new(server_input));s
+        let (to_gui, to_server) = body(server_input, &input_reader, from_gui, &mut state, &mut logical_map);
 
         if logical_map.updated {
             let mut image = real_image.lock().unwrap();
@@ -176,7 +179,9 @@ where
         }
 
         updates_send.write(to_gui);
-        updates_send.swap();
+        // updates_send.swap();
+
+        input_reader.update_click_handler();
 
         // let data = ();
 

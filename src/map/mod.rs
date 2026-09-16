@@ -1,5 +1,6 @@
-use std::{collections::HashSet, fmt::Debug, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
+use std::{collections::HashSet, fmt::Debug, fs, num::ParseFloatError, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
+use serde::Deserialize;
 use crate::{BACKGROUND_LAYER, game::{self, LogicalMap, unit::{AllUnitsDisplay, UnitDisplay}}, id::{IdIterator, IndexedBy}, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
 
 const SCROLL_SCALE: f32 = 500.0;
@@ -172,6 +173,9 @@ impl Map {
 
         self.paint_map(painter);
         self.paint_units(painter, units.as_slice());
+        for (tile_id, &rect) in self.bboxes.iter_enumerated() {
+            ui.place(rect, egui::Label::new(tile_id.to_string()));
+        }
     }
 }
 
@@ -197,9 +201,31 @@ impl LoadMapError {
     }
 }
 
+pub struct MapProperties {
+    pub movement_costs: Vec<f32>,
+}
+
+#[derive(Deserialize)]
+struct MapPropertiesRaw {
+    movement_costs: Vec<String>,
+}
+
+impl TryFrom<MapPropertiesRaw> for MapProperties {
+    type Error = LoadMapError;
+    fn try_from(value: MapPropertiesRaw) -> Result<Self, Self::Error> {
+        Ok(Self {
+            movement_costs: value.movement_costs.into_iter()
+                .map(|val| val.parse())
+                .collect::<Result<Vec<_>, std::num::ParseFloatError>>()
+                .map_err(|e| LoadMapError::from_debug(e))?
+        })
+    }
+}
+
 pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::LogicalMap), LoadMapError> {
     const IDS_MAP_FILE_NAME: &str = "raw.png";
     const VISUAL_FILE_NAME: &str = "vis.png";
+    const PROPS_FILE_NAME: &str = "props.json";
     use std::sync::LazyLock;
     static MAPS_DIR: LazyLock<PathBuf> = LazyLock::new(|| ASSETS.join("maps"));
 
@@ -208,6 +234,8 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     let ids_map = utils::load_image_from_path(dir_path.join(IDS_MAP_FILE_NAME))
         .map_err(|e| LoadMapError::from_debug(e))?;
     let real_map_image = utils::load_image_from_path(dir_path.join(VISUAL_FILE_NAME))
+        .map_err(|e| LoadMapError::from_debug(e))?;
+    let json: MapPropertiesRaw = serde_json::from_reader(fs::File::open(dir_path.join(PROPS_FILE_NAME)).map_err(|e| LoadMapError::from_debug(e))?)
         .map_err(|e| LoadMapError::from_debug(e))?;
 
     assert_eq!(ids_map.size, real_map_image.size);
@@ -218,9 +246,15 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     let length = 1+ ids_map.as_raw().chunks_exact(4).map(|chunk| u32::from_be_bytes(chunk.try_into().unwrap())).max().expect("If there isn't a max there must've been no tiles") as usize;
     log::info!("Loading map with {length} tiles.");
 
+    let props = MapProperties::try_from(json)?; 
+    assert_eq!(props.movement_costs.len(), length);
+
+    //Safety: We checked that lengths match.
+    let movement_costs = unsafe { IndexedBy::new(props.movement_costs) };
+
     let arc_ids_map = Arc::new(ids_map);
     let arc_real_map_image = Arc::new(real_map_image);
-    let logical_map = game::LogicalMap::new(arc_real_map_image, arc_ids_map.clone());
+    let logical_map = game::LogicalMap::new(arc_real_map_image, arc_ids_map.clone(), &movement_costs);
     let ids_map = Arc::into_inner(arc_ids_map).expect("All threads must be joined by now");
 
     let raw_image = Arc::new(Mutex::new(logical_map.get_real_image().clone()));
@@ -228,7 +262,7 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     let starting_rect = Rect::from_min_max(Pos2::ZERO, pos2(size[0] as f32, size[1] as f32));
     let bboxes = creator::compute_bbox(&ids_map);
 
-    Ok((Map::new(raw_image, ids_map, starting_rect, ctx, bboxes), logical_map))
+    Ok((Map::new(raw_image, ids_map, starting_rect, ctx, bboxes), logical_map,))
 
 }
 
