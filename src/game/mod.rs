@@ -180,12 +180,19 @@ where
     let mut stream = std::net::TcpStream::connect(server_socket).unwrap();
     let mut input_reader = InputReader::default();
     loop {
+        let server_input: FromServer = match server::read_from_stream(&mut stream) {
+            Ok(val) => val,
+            Err(e) => match e.kind() {
+                std::io::ErrorKind::UnexpectedEof => { log::info!("Connection lost! Exiting..."); break; },
+                _ => unimplemented!("Unimplemented error type when reading from server stream: {e}")
+            }
+        };
         if crate::CLOSING_REQUESTED.load(Ordering::Acquire) {
             log::info!("Close requested! Exiting...");
             break;
         }
 
-        let server_input: FromServer = server::read_from_stream(&mut stream).unwrap();
+        // let server_input: FromServer = server::read_from_stream(&mut stream).unwrap();
 
         let (input_snapshot, from_gui) = from_gui.read();
         // log::info!("Before upadate snapgh: {}", input_snapshot.pointer_state.any_down());

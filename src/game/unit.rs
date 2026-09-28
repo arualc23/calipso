@@ -23,7 +23,8 @@ pub struct Unit {
 }
 
 impl Unit {
-    pub fn new(id: UnitId, tile: tile::TileId, controller: player::PlayerId, exists: bool, texture: TextureHandle) -> Self {
+    pub fn new(args: FactoryArgs) -> Self {
+        let FactoryArgs { id, tile, controller, exists, texture } = args;
         Self { id, tile, controller, exists, texture }
     }
 
@@ -31,6 +32,15 @@ impl Unit {
         UnitDisplay { tile_id: self.tile, unit_id: self.id, texture: self.texture.clone() }
     }
 }
+
+pub struct FactoryArgs {
+    pub id: UnitId,
+    pub tile: tile::TileId,
+    pub controller: player::PlayerId,
+    pub exists: bool,
+    pub texture: TextureHandle,
+}
+
 struct UnitStorageUninit {
     inner: IndexedBy<UnitId, Unit>,
     tiles_count: usize,
