@@ -24,7 +24,7 @@ impl Default for ThreadPool {
                     if let Ok(f) = recv_job.recv() {
                         *thread_side_busy_semaphore.lock().unwrap() = true;
                         (f)();
-                        log::info!("Job on thread {i} finished");
+                        // log::info!("Job on thread {i} finished");
                         *thread_side_busy_semaphore.lock().unwrap() = false;
                     } else {
                         std::hint::spin_loop();
