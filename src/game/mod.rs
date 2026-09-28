@@ -180,11 +180,12 @@ where
     let mut stream = std::net::TcpStream::connect(server_socket).unwrap();
     let mut input_reader = InputReader::default();
     loop {
-        let server_input: FromServer = server::read_from_stream(&mut stream).unwrap();
         if crate::CLOSING_REQUESTED.load(Ordering::Acquire) {
             log::info!("Close requested! Exiting...");
             break;
         }
+
+        let server_input: FromServer = server::read_from_stream(&mut stream).unwrap();
 
         let (input_snapshot, from_gui) = from_gui.read();
         // log::info!("Before upadate snapgh: {}", input_snapshot.pointer_state.any_down());

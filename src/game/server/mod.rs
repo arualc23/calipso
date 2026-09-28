@@ -84,10 +84,10 @@ fn server_loop<State, FromServer: Serialize, ToServer: DeserializeOwned + Defaul
 
 pub(super) fn read_from_stream<Data: DeserializeOwned>(stream: &mut TcpStream) -> std::io::Result<Data> {
     let mut length = [0u8; 4];
-    stream.read_exact(&mut length).unwrap();
+    stream.read_exact(&mut length)?;
     let length = u32::from_be_bytes(length) as usize;
     let mut buf = vec![0u8; length];
-    stream.read_exact(&mut buf).unwrap();
+    stream.read_exact(&mut buf)?;
     log::debug!("buffer after read: {:?}", buf);
     Ok(bincode_next::serde::decode_from_slice(&buf, CONFIG).unwrap().0)
 }
