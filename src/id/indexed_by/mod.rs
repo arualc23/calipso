@@ -45,6 +45,12 @@ impl<Ind, T> IndexedBy<Ind, T> where Ind: ID {
         }
     }
 
+    pub fn from_fn(length: usize, generator: impl Fn(Ind) -> T) -> Self {
+        let inner = Vec::from_fn(length, |id| generator(id.into()));
+
+        Self { inner, index: PhantomData }
+    }
+
     pub fn iter_ids(&self) -> IdIterator<Ind> {
         IdIterator { current: 0.into(), last: self.inner.len().into() }
     }
@@ -90,4 +96,8 @@ impl<Ind, T> IndexedBy<Ind, T> where Ind: ID {
     pub fn chunks_mut(&mut self, chunk_size: usize) -> core::slice::ChunksMut<'_, T> {
         self.inner.chunks_mut(chunk_size)
     }
+
+    // pub fn contains(&self, val: &T) -> bool where T: PartialEq{
+    //     self.inner.contains(val)
+    // }
 }

@@ -17,6 +17,7 @@ pub mod consts;
 
 pub(crate) use window::CLOSING_REQUESTED;
 pub use consts::*;
+pub use utils::threads::{THREAD_POOL, PROCESS_COUNT};
 
 #[inline]
 pub(crate) fn global_close() {
@@ -24,6 +25,7 @@ pub(crate) fn global_close() {
 }
 
 pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::state::State>, title: String) {
+    let _ = *PROCESS_COUNT;
     #[cfg(test)]
     let event_loop = winit::event_loop::EventLoop::builder().with_any_thread(true).build().unwrap();
     #[cfg(not(test))]
@@ -47,6 +49,42 @@ use std::net::{TcpListener, TcpStream};
 use super::*;
 #[allow(unused_imports)]
     use log::{debug, error, info, warn};
+
+    #[test]
+    fn thread_pool() {
+        env_logger::init();
+        let _ = *PROCESS_COUNT;
+
+        let now = std::time::Instant::now();
+        THREAD_POOL.lock().unwrap().scope(|s| {
+            for _ in 0..*PROCESS_COUNT {
+                s.add_job(|| dummy_fn());
+            }
+        });
+
+        log::info!("{}", now.elapsed().as_millis());
+
+    }
+
+    #[inline(never)]
+    fn dummy_fn() {
+        const BIG: usize = 100000;
+        let mut x: f64 = 1.1;
+        let random = rand::random::<u8>() as f64 / 1280000000.0;
+        let mut fin = vec![0.0; BIG * 100];
+        for j in 0..100 {
+            let mut res = vec![0.0; BIG];
+            for i in 0..BIG {
+                x = x.powf(1.00000001 + random);
+                res[i] = x;
+            }
+            fin[BIG*j..BIG*(j+1)].copy_from_slice(&res);
+        }
+        
+
+
+        log::info!("{x}");
+    }
 
     // #[test]
     // pub(crate) fn test1() {

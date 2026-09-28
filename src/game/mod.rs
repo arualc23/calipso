@@ -3,7 +3,7 @@ use std::{collections::HashSet, fmt::Debug, sync::{Arc, Mutex, atomic::Ordering}
 use egui::{Color32, ColorImage};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{consts, game::interface::InputReader, id::{IndexedBy}, map::IdsMap, tile, utils::{self, DBufferReader}};
+use crate::{THREAD_POOL, consts, game::interface::InputReader, id::IndexedBy, map::IdsMap, tile, utils::{self, DBufferReader}};
 
 pub mod interface;
 pub mod unit;
@@ -83,21 +83,21 @@ impl LogicalMap {
         })
             
         )};
-        let chunks = map.chunks_mut(length.div_ceil(consts::PROCESS_COUNT));
+        
 
-        std::thread::scope(|s| {
-            let mut processes = [const {None}; consts::PROCESS_COUNT];
-            for (i, chunk) in chunks.enumerate() {
+        crate::THREAD_POOL.lock().unwrap().scope(|s| {
+            let chunks = map.chunks_mut(length.div_ceil(*crate::PROCESS_COUNT));
+            for (_, chunk) in chunks.enumerate() {
+                log::info!("Spawning thread");
                 let real_image = real_image.clone();
                 let ids_map = ids_map.clone();
-                processes[i] = Some(s.spawn(move || {
+                s.add_job(move || {
                     for tile in chunk {
-                        tile.paste_from_image(real_image.clone(), ids_map.clone());
+                        tile.paste_from_image(&real_image, &ids_map);
                     }
-                }));
+                });
             }
 
-            processes.into_iter().for_each(|option| {option.and_then(|handle| Some(handle.join()));});
         });
 
         let neighbours = get_neighbours(&ids_map);
@@ -117,14 +117,17 @@ impl LogicalMap {
         self.map.get(id)
     }
 
-    pub fn get_path(&self, tile_from: tile::TileId, tile_to: tile::TileId) -> Path {
-        // log::info!("get_path called");
-        let raw = utils::dijkstra(&self, tile_from);
-        // log::info!("raw obtained: {:#?}", &raw);
+    pub fn get_path(&self, tile_from: tile::TileId, tile_to: tile::TileId, military_access: &[player::PlayerId]) -> Path {
+        log::info!("get_path called");
+        let raw = utils::dijkstra(&self, tile_from, military_access);
+
+        if raw[tile_to].0.is_infinite() { log::warn!("Unreachable tile!"); return Path { inner: vec![] }; }
+        log::info!("raw obtained: {:#?}", &raw);
         let mut path = Vec::with_capacity(self.tiles_count());
         path.push(tile_to);
         let mut cursor = raw[tile_to].1;
         while cursor != tile_from {
+            log::info!("{cursor}");
             path.push(cursor);
             cursor = raw[cursor].1;
         }
@@ -192,10 +195,8 @@ where
             break;
         }
 
-        // let server_input: FromServer = server::read_from_stream(&mut stream).unwrap();
-
         let (input_snapshot, from_gui) = from_gui.read();
-        // log::info!("Before upadate snapgh: {}", input_snapshot.pointer_state.any_down());
+
         input_reader.update_snapshot(input_snapshot);
 
         let (to_gui, to_server) = body(server_input, &input_reader, from_gui, &mut state, &mut logical_map);

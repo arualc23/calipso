@@ -1,14 +1,15 @@
-use std::{cmp::Reverse, collections::BinaryHeap, ops::{Add, }, path::Path, sync::LazyLock};
+use std::{cmp::Reverse, collections::BinaryHeap, marker::PhantomData, ops::Add, panic::{AssertUnwindSafe, catch_unwind, resume_unwind}, path::Path, sync::{Arc, Condvar, LazyLock, Mutex, atomic::{AtomicBool, Ordering}}};
 
 use egui::{ColorImage, Context, TextureHandle};
 
-use crate::{game::{self, LogicalMap}, id::IndexedBy, tile::TileId};
+use crate::{game::{self, LogicalMap, player::PlayerId}, id::IndexedBy, tile::TileId};
 
 pub static ASSETS: LazyLock<&Path> = LazyLock::new(|| Path::new("assets"));
 pub const UV: egui::Rect = egui::Rect {min: egui::Pos2 {x: 0.0, y: 0.0}, max: egui::Pos2 {x: 1.0, y: 1.0}};
 
 pub mod dbuffer;
 pub use dbuffer::{DBufferReader, DBufferWriter};
+pub mod threads;
 
 #[macro_export]
 macro_rules! path {
@@ -16,6 +17,7 @@ macro_rules! path {
         std::path::Path::new($e)
     };
 }
+
 
 
 pub fn load_image_from_path(path: impl AsRef<std::path::Path>) -> Result<ColorImage, image::ImageError> {
@@ -258,7 +260,8 @@ impl Ord for Element {
 
 /// # Returns
 /// A map from tile ids to the distance from origin, and the previous tile on the path.
-pub(crate) fn dijkstra(lmap: &LogicalMap, tile: TileId) -> IndexedBy<TileId, (f32, TileId)> {
+pub(crate) fn dijkstra(lmap: &LogicalMap, tile: TileId, military_access: &[PlayerId]) -> IndexedBy<TileId, (f32, TileId)> {
+    // let military_access = 
     let mut pool: BinaryHeap<Reverse<Element>> = BinaryHeap::new();
     pool.push(Reverse(Element(0.0.into(), tile)));
 
@@ -272,8 +275,8 @@ pub(crate) fn dijkstra(lmap: &LogicalMap, tile: TileId) -> IndexedBy<TileId, (f3
         }
 
         for neighbour in lmap.neighbours(other_tile) {
-            let new_cost = cost + lmap.get_tile(other_tile).expect("neighbours only returns valid ids").movement_cost().into();
-            if new_cost < res[*neighbour].0.into() {
+            if military_access.contains(&lmap.get_tile(*neighbour).unwrap().controller) {
+                let new_cost =  cost + lmap.get_tile(other_tile).expect("neighbours only returns valid ids").movement_cost().into();
                 res[*neighbour] = (new_cost.into(), other_tile);
                 pool.push(Reverse(Element(new_cost, *neighbour)));
             }

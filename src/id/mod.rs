@@ -46,6 +46,11 @@ macro_rules! id_derives {
 //     }
 // }
 
+#[inline(always)]
+pub fn convert_ids<First: crate::id::ID, Second: crate::id::ID>(first: First) -> Second {
+    <First as Into<usize>>::into(first).into()
+}
+
 pub trait Increment {
     fn increment(&mut self);
 }
