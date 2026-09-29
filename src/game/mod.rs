@@ -93,7 +93,8 @@ impl LogicalMap {
                 let ids_map = ids_map.clone();
                 s.add_job(move || {
                     for tile in chunk {
-                        tile.paste_from_image(&real_image, &ids_map);
+
+                        utils::time(|| tile.paste_from_image(&real_image, &ids_map));
                     }
                 });
             }
@@ -101,6 +102,8 @@ impl LogicalMap {
         });
 
         let neighbours = get_neighbours(&ids_map);
+
+        log::info!("LogicalMap::new returns");
 
         Self { map, real_image: (*real_image).clone(), updated: false, neighbours, player_color_table }
     }
@@ -121,6 +124,7 @@ impl LogicalMap {
         log::info!("get_path called");
         let raw = utils::dijkstra(&self, tile_from, military_access);
 
+        log::info!("raw obtained");
         if raw[tile_to].0.is_infinite() { log::warn!("Unreachable tile!"); return Path { inner: vec![] }; }
         log::info!("raw obtained: {:#?}", &raw);
         let mut path = Vec::with_capacity(self.tiles_count());

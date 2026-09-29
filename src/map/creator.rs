@@ -1,18 +1,35 @@
 use egui::{Color32, ColorImage, Pos2, Rect, pos2, vec2};
+use std::sync::{Arc, Mutex};
 
 use crate::{id::{IdIterator, IndexedBy}, map::IdsMap, tile::TileId, utils::color_image_to_iter};
 
 pub type Bboxes = IndexedBy<TileId, Rect>;
 
 pub fn compute_bbox(map: &IdsMap) -> Bboxes {
-    let mut res = IndexedBy::filled(<TileId as Into<usize>>::into(map.max()) + 1, Rect::ZERO,);
-    for id in IdIterator::new(0.into(), map.max()) {
-        let color = id.into();
-        let center = find_center(color, &*map);
-        let radius = binary_search_biggest_rect(color, center, &*map) as f32 * 2.0;
-        res[id] = Rect::from_center_size(center, vec2(radius, radius))
-    }
-    res
+    log::info!("compute bbox called");
+    let res = Arc::new(Mutex::new(IndexedBy::filled(<TileId as Into<usize>>::into(map.max()) + 1, Rect::ZERO,)));
+    let length: usize = map.max().into();
+
+    let tmp = IdIterator::new(0.into(), map.max()).collect::<Vec<_>>();
+
+    crate::THREAD_POOL.lock().unwrap().scope(|s| {
+        let chunks = tmp.chunks(length.div_ceil(*crate::PROCESS_COUNT));
+
+        for (i, chunk) in chunks.enumerate() {
+            let thread_side = res.clone();
+            s.add_job(Box::new(move || {
+                for &id in chunk {
+                    let color = id.into();
+                    let center = find_center(color, &*map);
+                    let radius = binary_search_biggest_rect(color, center, &*map) as f32 * 2.0;
+                    thread_side.lock().unwrap()[id] = Rect::from_center_size(center, vec2(radius, radius));
+                }
+
+            }));
+        }
+    });  
+    
+    std::mem::replace(Arc::into_inner(res).unwrap().get_mut().unwrap(), IndexedBy::empty())
 }
 
 fn find_center(color: Color32, image: &ColorImage) -> Pos2 {
@@ -31,7 +48,7 @@ fn binary_search_biggest_rect(color: Color32, center: Pos2, image: &ColorImage) 
     let dist = center.x.min(RECT_MAX_SIZE as f32).min(center.y).min(image.size[0] as f32 - center.x).min(image.size[1] as f32 - center.y);
     let vector: Vec<usize> = (1..=dist as usize).collect();
 
-    log::info!("Iteration start");
+    // log::info!("Iteration start");
 
     match vector.binary_search_by(|&r| {
         let rect = Rect::from_center_size(center, vec2(r as f32, r as f32));

@@ -18,6 +18,12 @@ macro_rules! path {
     };
 }
 
+pub fn time(f: impl FnOnce()) -> u128 {
+    let now = std::time::Instant::now();
+    f();
+    now.elapsed().as_millis()
+}
+
 
 
 pub fn load_image_from_path(path: impl AsRef<std::path::Path>) -> Result<ColorImage, image::ImageError> {
@@ -210,6 +216,9 @@ pub(crate) fn has_duplicates<T: PartialEq>(slice: &[T]) -> bool {
 ///Implements Eq and Ord, but panics if comparing NaN.
 #[derive(Debug, PartialOrd, Clone, Copy)]
 pub(crate) struct Totalf32(f32);
+impl Totalf32 {
+    pub const INFINITY: Self = Self(f32::INFINITY);
+}
 
 impl PartialEq for Totalf32 {
     fn eq(&self, other: &Self) -> bool {
@@ -245,6 +254,12 @@ impl Add for Totalf32 {
     }
 }
 
+impl std::fmt::Display for Totalf32 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 #[derive(PartialEq, Eq)]
 struct Element(Totalf32, TileId);
 impl PartialOrd for Element {
@@ -270,16 +285,29 @@ pub(crate) fn dijkstra(lmap: &LogicalMap, tile: TileId, military_access: &[Playe
     res[tile] = (0.0, tile);
 
     while let Some(Reverse(Element(cost, other_tile))) = pool.pop() {
-        if cost != res[other_tile].0.into() {
-            continue;
-        }
+        
+        if cost == Totalf32::INFINITY { break; }
+        // if cost != res[other_tile].0.into() {
+        //     // log::info!("skippping... {} != {}", cost, res[other_tile].0);
+        //     continue;
+        // }
 
-        for neighbour in lmap.neighbours(other_tile) {
-            if military_access.contains(&lmap.get_tile(*neighbour).unwrap().controller) {
-                let new_cost =  cost + lmap.get_tile(other_tile).expect("neighbours only returns valid ids").movement_cost().into();
-                res[*neighbour] = (new_cost.into(), other_tile);
-                pool.push(Reverse(Element(new_cost, *neighbour)));
+        log::info!("checking {}", other_tile);
+
+        for &neighbour in lmap.neighbours(other_tile) {
+            if !military_access.contains(&lmap.get_tile(neighbour).unwrap().controller) {
+                pool.push(Reverse(Element(Totalf32::INFINITY, neighbour)));
+                continue;
             }
+
+            let old_cost = res[neighbour].0.into();
+            let new_cost =  cost + lmap.get_tile(other_tile).expect("neighbours only returns valid ids").movement_cost().into();
+            if new_cost < old_cost {
+                res[neighbour] = (new_cost.into(), other_tile);
+                log::info!("Pushing {} with cost {}", neighbour, new_cost);
+                pool.push(Reverse(Element(new_cost, neighbour)));
+            }
+            pool.push(Reverse(Element(Totalf32::INFINITY, neighbour)));
         }
     }
 

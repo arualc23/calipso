@@ -91,7 +91,7 @@ struct ThreadHandle {
 
 impl ThreadHandle {
     fn is_busy(&self) -> bool {
-        log::info!("{} is_busy called", self.id);
+        // log::info!("{} is_busy called", self.id);
         match self.busy_semaphore.try_lock() {
             Ok(val) => *val,
             Err(_) => true
