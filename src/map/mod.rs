@@ -1,7 +1,7 @@
-use std::{collections::HashSet, fmt::Debug, fs, num::ParseFloatError, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
+use std::{collections::HashSet, fmt::Debug, fs, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
-use serde::{Deserialize, de::DeserializeOwned};
-use crate::{BACKGROUND_LAYER, game::{self, LogicalMap, NULL, player, unit::{AllUnitsDisplay, UnitDisplay}}, id::{self, IdIterator, IndexedBy}, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
+use serde::{Deserialize};
+use crate::{BACKGROUND_LAYER, game::{self, NULL, player, unit::{AllUnitsDisplay, UnitDisplay}}, id::{IdIterator, IndexedBy}, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
 
 const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
@@ -221,10 +221,6 @@ struct MapPropertiesRaw {
     movement_costs: Vec<String>,
     controllers: Vec<usize>,
 }
-
-// pub trait FromJSON {
-//     fn from_json(file: &mut fs::File) -> Self;
-// }
 
 impl TryFrom<MapPropertiesRaw> for MapProperties {
     type Error = LoadMapError;

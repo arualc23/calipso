@@ -15,7 +15,7 @@ pub fn compute_bbox(map: &IdsMap) -> Bboxes {
     crate::THREAD_POOL.lock().unwrap().scope(|s| {
         let chunks = tmp.chunks(length.div_ceil(*crate::PROCESS_COUNT));
 
-        for (i, chunk) in chunks.enumerate() {
+        for (_, chunk) in chunks.enumerate() {
             let thread_side = res.clone();
             s.add_job(Box::new(move || {
                 for &id in chunk {
@@ -47,8 +47,6 @@ fn binary_search_biggest_rect(color: Color32, center: Pos2, image: &ColorImage) 
     const RECT_MAX_SIZE: usize = 1000;
     let dist = center.x.min(RECT_MAX_SIZE as f32).min(center.y).min(image.size[0] as f32 - center.x).min(image.size[1] as f32 - center.y);
     let vector: Vec<usize> = (1..=dist as usize).collect();
-
-    // log::info!("Iteration start");
 
     match vector.binary_search_by(|&r| {
         let rect = Rect::from_center_size(center, vec2(r as f32, r as f32));

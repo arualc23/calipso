@@ -40,12 +40,6 @@ pub fn init(initializer: impl FnOnce(&window::EguiRenderer) -> Box<dyn window::s
 #[cfg(test)]
 mod tests {
 
-// use crate::{unit_display::UnitDisplay};
-
-    // use core::panicking::panic;
-
-use std::net::{TcpListener, TcpStream};
-
 use super::*;
 #[allow(unused_imports)]
     use log::{debug, error, info, warn};

@@ -12,7 +12,6 @@ pub struct ThreadPool {
 impl Default for ThreadPool {
     fn default() -> Self {
         let thread_count = num_cpus::get();
-        // let thread_count = 32;
         let mut handles = Vec::with_capacity(thread_count);
         for i in 0..thread_count {
             let (send_job, recv_job) = std::sync::mpsc::channel::<Box<dyn ThreadJob>>();
@@ -24,7 +23,6 @@ impl Default for ThreadPool {
                     if let Ok(f) = recv_job.recv() {
                         *thread_side_busy_semaphore.lock().unwrap() = true;
                         (f)();
-                        // log::info!("Job on thread {i} finished");
                         *thread_side_busy_semaphore.lock().unwrap() = false;
                     } else {
                         std::hint::spin_loop();
@@ -91,12 +89,10 @@ struct ThreadHandle {
 
 impl ThreadHandle {
     fn is_busy(&self) -> bool {
-        // log::info!("{} is_busy called", self.id);
         match self.busy_semaphore.try_lock() {
             Ok(val) => *val,
             Err(_) => true
         }
-        // *self.busy_semaphore.lock().unwrap()
     }
 
     fn force_busy(&self) {

@@ -2,7 +2,7 @@ use std::{ops::{Deref, DerefMut}, sync::mpsc::{Receiver, Sender}};
 
 use egui::TextureHandle;
 
-use crate::{CLOSING_REQUESTED, game::player, id::{self, IdIterator, IndexedBy}, id_derives, tile::{self, TileId}, utils};
+use crate::{game::player, id::{IndexedBy}, id_derives, tile::{self, TileId}, utils};
 
 use getset::{CloneGetters, CopyGetters, Getters, Setters};
 
@@ -78,15 +78,10 @@ impl UnitStorageUninit {
     }
 
     fn create_units_display(&self) -> (AllUnitsDisplay, Sender<CurrentPositions>) {
-        // log::info!("create_units_display called");
         let (send, recv) = std::sync::mpsc::channel();
-        // log::info!("channel obtained");
         let mut units_display = AllUnitsDisplay {inner: vec![], recv};
-        // log::info!("AllUniDisp obtained");
         units_display.update_inner(self.current_positions());
-        // log::info!("AllUniDisp updated");
         (units_display, send)
-        
     }
 }
 

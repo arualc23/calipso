@@ -3,7 +3,7 @@ use std::{collections::HashSet, fmt::Debug, sync::{Arc, Mutex, atomic::Ordering}
 use egui::{Color32, ColorImage};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{THREAD_POOL, consts, game::interface::InputReader, id::IndexedBy, map::IdsMap, tile, utils::{self, DBufferReader}};
+use crate::{game::interface::InputReader, id::IndexedBy, map::IdsMap, tile, utils::{self, DBufferReader}};
 
 pub mod interface;
 pub mod unit;
@@ -76,7 +76,6 @@ impl LogicalMap {
     ) -> Self {
 
         let length = <tile::TileId as Into<usize>>::into(ids_map.max()) + 1usize;
-        // let mut map = tile::TilesContainer::new(length, real_image.size, movement_costs);
         let mut map = unsafe { IndexedBy::new(Vec::from_fn(length, |id| {
             let tile_id = tile::TileId::from(id);
             tile::Tile::empty(tile_id, real_image.size, movement_costs[tile_id], controllers[tile_id])
@@ -167,10 +166,8 @@ pub(crate) fn game_loop<FromGUI, ToGUI, GameState, ToServer, FromServer>(
     mut logical_map: LogicalMap, 
     real_image: Arc<Mutex<ColorImage>>, 
     mut from_gui: DBufferReader<(InputSnapshot, FromGUI)>,
-    // mut units: unit::UnitStorage,
     mut state: GameState,
     server_socket: std::net::SocketAddr,
-    // dbg_send: Sender<Box<dyn Any + Send>>,
     mut updates_send: utils::DBufferWriter<ToGUI>
 ) 
 where
@@ -180,7 +177,6 @@ where
     ToServer: Serialize,
 {
     log::info!("Client game loop called");
-    // let mut input = <(InputSnapshot, FromGUI)>::default();
     //Server always needs to initialize first
     std::thread::sleep(std::time::Duration::from_millis(1000));
     log::info!("Connecting to server at {server_socket:?}...");
@@ -212,11 +208,8 @@ where
         }
 
         updates_send.write(to_gui);
-        // updates_send.swap();
 
         input_reader.update_click_handler();
-
-        // let data = ();
 
         server::write_to_stream(&mut stream, to_server).unwrap();
     }

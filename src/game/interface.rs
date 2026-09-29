@@ -1,6 +1,4 @@
-// use std::any::Any;
-
-use std::{fmt::Debug, sync::mpsc::{Receiver, Sender}};
+use std::{fmt::Debug};
 
 use enum_map::{Enum, EnumMap};
 use proc_macros_crate::ArrayVariants;
@@ -19,10 +17,7 @@ pub fn send<FromGUI: Clone + Debug>(ctx: egui::Context, msg: FromGUI, map_opt: O
         }
     });
 
-    // log::info!("Sending input snapshot: {:?}", input_snapshot.pointer_state.primary_down());
-
     sender.write((input_snapshot, msg));
-    // log::info!("Sent!");
 }
 
 pub fn init_game_loop<FromGUI, ToGUI, ClientState, ServerState, ToServer, FromServer>(
@@ -30,7 +25,6 @@ pub fn init_game_loop<FromGUI, ToGUI, ClientState, ServerState, ToServer, FromSe
     server_loop_body: impl super::server::ServerLoopBody<ServerState, FromServer, ToServer,>,
     logical_map: crate::game::LogicalMap, 
     real_image: std::sync::Arc<std::sync::Mutex<egui::ColorImage>>,
-    // units: unit::UnitStorage,
     client_state: ClientState,
     server_state: ServerState
 ) -> (utils::DBufferWriter<(InputSnapshot, FromGUI)>, utils::DBufferReader<ToGUI>)
@@ -43,11 +37,7 @@ where
     ToServer: Serialize + DeserializeOwned + Default,
 
 {
-
-    // let (send, recv) = std::sync::mpsc::channel();
     let (to_gui, from_gui) = utils::dbuffer::new((InputSnapshot::default(), FromGUI::default()));
-    // let dbuffer = std::pin::Pin
-    // let (updates_send, updates_recv) = std::sync::mpsc::channel();
     let (updates_send, updates_recv) = utils::dbuffer::new(ToGUI::default());
     super::server::init_server_loop(server_loop_body, server_state, super::server::SERVER_SOCKET_ADDRESS, logical_map.map.clone());
     let _ = std::thread::spawn(move || crate::game::game_loop(
@@ -57,26 +47,17 @@ where
         from_gui, 
         client_state, 
         super::server::SERVER_SOCKET_ADDRESS,
-        // dbg_send
         updates_send
     ));
 
     (to_gui, updates_recv)
 }
 
-
-
-// pub type FullMessage<FromGUI> = (InputSnapshot, FromGUI);
-// pub trait GameLoop<FromGUI, ToGUI, GameState, ToServer, FromServer, 'a, 'b, 'c> = 
-//     FnMut(FromServer, &FullMessage<FromGUI>, &mut GameState, &mut LogicalMap) -> (ToGUI, ToServer) + Send + 'static;
-
 #[derive(Debug, Default, Clone)]
 pub struct InputSnapshot {
     pub pointer_state: egui::PointerState,
     pub over_tile: Option<crate::tile::TileId>,
     pub keys_down: std::collections::HashSet<egui::Key>,
-
-    // click_handler: ClickHandler,
 }
 
 #[derive(Debug, Default)]
@@ -96,7 +77,6 @@ impl InputReader {
     pub(crate) fn update_snapshot(&mut self, input: InputSnapshot) {
         let InputSnapshot { pointer_state, over_tile, keys_down } = input;
         
-        // log::info!("In update snaphot: {}", pointer_state.any_down());
         self.pointer_state = pointer_state;
         self.over_tile = over_tile;
         self.keys_down = keys_down;
@@ -120,7 +100,6 @@ impl ClickHandler {
     }
 
     fn check(&self, button: PointerButton, input: &egui::PointerState) -> bool {
-        // log::info!("{:?}", input.button_down(button.into()));
         (!self.previous[button]) && input.button_down(button.into())
     }
 }

@@ -1,4 +1,4 @@
-use std::{cmp::Reverse, collections::BinaryHeap, marker::PhantomData, ops::Add, panic::{AssertUnwindSafe, catch_unwind, resume_unwind}, path::Path, sync::{Arc, Condvar, LazyLock, Mutex, atomic::{AtomicBool, Ordering}}};
+use std::{cmp::Reverse, collections::BinaryHeap, ops::Add, path::Path, sync::{LazyLock,}};
 
 use egui::{ColorImage, Context, TextureHandle};
 
@@ -276,23 +276,15 @@ impl Ord for Element {
 /// # Returns
 /// A map from tile ids to the distance from origin, and the previous tile on the path.
 pub(crate) fn dijkstra(lmap: &LogicalMap, tile: TileId, military_access: &[PlayerId]) -> IndexedBy<TileId, (f32, TileId)> {
-    // let military_access = 
     let mut pool: BinaryHeap<Reverse<Element>> = BinaryHeap::new();
     pool.push(Reverse(Element(0.0.into(), tile)));
 
     let mut res = IndexedBy::filled(lmap.tiles_count(), (f32::INFINITY.into(), tile));
-    // log::info!("lmap length: {}", lmap.tiles_count());
     res[tile] = (0.0, tile);
 
     while let Some(Reverse(Element(cost, other_tile))) = pool.pop() {
         
         if cost == Totalf32::INFINITY { break; }
-        // if cost != res[other_tile].0.into() {
-        //     // log::info!("skippping... {} != {}", cost, res[other_tile].0);
-        //     continue;
-        // }
-
-        log::info!("checking {}", other_tile);
 
         for &neighbour in lmap.neighbours(other_tile) {
             if !military_access.contains(&lmap.get_tile(neighbour).unwrap().controller) {
@@ -304,7 +296,6 @@ pub(crate) fn dijkstra(lmap: &LogicalMap, tile: TileId, military_access: &[Playe
             let new_cost =  cost + lmap.get_tile(other_tile).expect("neighbours only returns valid ids").movement_cost().into();
             if new_cost < old_cost {
                 res[neighbour] = (new_cost.into(), other_tile);
-                log::info!("Pushing {} with cost {}", neighbour, new_cost);
                 pool.push(Reverse(Element(new_cost, neighbour)));
             }
             pool.push(Reverse(Element(Totalf32::INFINITY, neighbour)));
