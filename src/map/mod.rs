@@ -1,7 +1,7 @@
 use std::{collections::HashSet, fmt::Debug, fs, num::ParseFloatError, ops::{Deref, DerefMut, Index}, path::PathBuf, sync::{Arc, Mutex}};
 use egui::{Color32, ColorImage, Context, Painter, Pos2, Rect, TextureHandle, Ui, Vec2, pos2};
 use serde::{Deserialize, de::DeserializeOwned};
-use crate::{BACKGROUND_LAYER, game::{self, LogicalMap, player, unit::{AllUnitsDisplay, UnitDisplay}}, id::{IdIterator, IndexedBy}, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
+use crate::{BACKGROUND_LAYER, game::{self, LogicalMap, NULL, player, unit::{AllUnitsDisplay, UnitDisplay}}, id::{self, IdIterator, IndexedBy}, map::creator::Bboxes, tile::TileId, utils::{self, ASSETS, color_image_to_iter}};
 
 const SCROLL_SCALE: f32 = 500.0;
 pub const MAX_MAP_RAW_LEN: usize = 5000 * 5000;
@@ -61,6 +61,7 @@ pub struct Map {
     raw_image: Arc<Mutex<ColorImage>>,
     ctx: Context,
     bboxes: Bboxes,
+    boundaries_overlay: TextureHandle,
 }
 
 impl Map {
@@ -118,6 +119,8 @@ impl Map {
     }
 
     pub fn new(raw_image: Arc<Mutex<ColorImage>>, ids_map: IdsMap, starting_rect: Rect, ctx: Context, bboxes: Bboxes) -> Self {
+        let boundaries_overlay = Self::get_new_texture(&create_boundaries_overlay_image(&ids_map.inner), &ctx, utils::TextureOptions::Exact);
+
         let rect = starting_rect;
         let starting_diag = rect.size().length();
         let texture = Self::get_new_texture(&raw_image.lock().unwrap(), &ctx, utils::TextureOptions::Exact);
@@ -130,7 +133,8 @@ impl Map {
             starting_diag,
             raw_image,
             ctx,
-            bboxes
+            bboxes,
+            boundaries_overlay,
         }
     }
 
@@ -160,6 +164,11 @@ impl Map {
         }
     }
 
+    ///Prefer [Map::run_frame].
+    pub fn paint_boundaries(&self, painter: &Painter) {
+        painter.image(self.boundaries_overlay.id(), self.rect, crate::UV, egui::Color32::WHITE);
+    }
+
     ///Paints everything and updates with camera movement. Set painter to None to get the default (background layer painter).
     pub fn run_frame(&mut self, ui: &mut Ui, painter: Option<&Painter>, units: &mut AllUnitsDisplay) {
         self.update_map(ui);
@@ -172,6 +181,7 @@ impl Map {
         };
 
         self.paint_map(painter);
+        self.paint_boundaries(painter);
         self.paint_units(painter, units.as_slice());
         for (tile_id, &rect) in self.bboxes.iter_enumerated() {
             ui.place(rect, egui::Label::new(tile_id.to_string()));
@@ -278,8 +288,6 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
     let MapProperties { movement_costs, controllers }= props;
 
 
-    // let player_color_table = unsafe { IndexedBy::new(vec![Color32::from_rgba_unmultiplied(255, 0, 0, 128), ]) };
-
     let arc_ids_map = Arc::new(ids_map);
     let arc_real_map_image = Arc::new(real_map_image);
     let mut logical_map = game::LogicalMap::new(arc_real_map_image, arc_ids_map.clone(), &movement_costs, &controllers, DEBUG_PLAYER_COLOR_TABLE.clone());
@@ -296,3 +304,29 @@ pub fn load_map(directory_name: &str, ctx: Context) -> Result<(Map, game::Logica
 
 }
 
+fn create_boundaries_overlay_image(ids_map_raw: &ColorImage) -> ColorImage {
+    let mut res = ColorImage::filled(ids_map_raw.size, NULL);
+    for ((x, y), color) in utils::color_image_to_iter(ids_map_raw).enumerated() {
+        for neighbour in neighbours(x as isize, y as isize) {
+            if neighbour.0 < 0 || neighbour.1 < 0 { continue; }
+            let neighbour = (neighbour.0 as usize, neighbour.1 as usize);
+            if neighbour.0 >= ids_map_raw.size[0] || neighbour.1 >= ids_map_raw.size[1] { continue; }
+            if ids_map_raw[neighbour] != *color {
+                res[neighbour] = Color32::BLACK;
+                res[(x, y)] = Color32::BLACK;
+            }
+
+        }
+    }
+
+    res
+}
+
+fn neighbours(x: isize, y: isize) -> [(isize, isize); 4] {
+    [
+        (x, y-1),
+        (x-1, y),
+        (x+1, y),
+        (x, y+1)
+    ]
+}
